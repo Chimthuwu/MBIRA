@@ -1,0 +1,364 @@
+// MBIRA Milestone 1 — native proof-of-concept host.
+//
+// Two modes:
+//   mbira-poc render <out.wav> <events.json> [--duration s] [--block N] [--rate SR]
+//     Deterministic offline render through the REAL native Elementary runtime
+//     (elem::Runtime<float>) fed by the same QuickJS DSP bundle used live.
+//     Prints a metrics JSON line: software latency (event accept sample ->
+//     first non-zero output sample, per note) and audio-render-loop CPU.
+//   mbira-poc live [--block N] [--rate SR]
+//     RtAudio (WinMM/MME) playback + RtMidi input. MIDI events are queued
+//     (bounded) and drained by a non-audio service thread which runs the JS
+//     renderer; the audio callback only calls runtime.process().
+//
+// Threading (mirrors the Runtime.h analysis in docs/architecture-decision.md):
+//   - JS graph construction + applyInstructions: non-audio threads only.
+//   - audio callback: runtime.process() exclusively; lock-free render-sequence
+//     swap inside the runtime; no JS, no locks, no allocation.
+//   - MIDI/service threads: bounded queues only.
+
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <deque>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <thread>
+#include <vector>
+
+#include "choc_Files.h"
+#include "choc_JSON.h"
+#include "choc_javascript.h"
+#include "choc_javascript_QuickJS.h"
+
+#include "Runtime.h"
+
+// RtAudio/RtMidi: WinMM backends on Windows (link winmm)
+#define __WINDOWS_MM__ 1
+#include "RtAudio.h"
+#include "RtMidi.h"
+
+// ---------------------------------------------------------------------------
+// WAV writer (16-bit PCM stereo)
+
+static void writeWav16(const char* path, const float* interleaved, size_t numFrames, int numChannels, double sr) {
+  std::vector<int16_t> pcm(numFrames * numChannels);
+  for (size_t i = 0; i < pcm.size(); ++i) {
+    float s = interleaved[i];
+    if (s > 1.0f) s = 1.0f;
+    if (s < -1.0f) s = -1.0f;
+    pcm[i] = (int16_t) std::lrint(s * 32767.0f);
+  }
+  FILE* f = fopen(path, "wb");
+  if (!f) { fprintf(stderr, "ERROR: cannot open %s for writing\n", path); exit(1); }
+  uint32_t dataSize = (uint32_t) (pcm.size() * 2);
+  uint32_t chunkSize = 36 + dataSize;
+  uint32_t fmtSize = 16, fmt = 1;
+  uint32_t srU = (uint32_t) sr, byteRate = (uint32_t)(sr * numChannels * 2);
+  uint16_t bits = 16, ch16 = (uint16_t) numChannels, align16 = (uint16_t)(numChannels * 2);
+  fwrite("RIFF", 1, 4, f); fwrite(&chunkSize, 4, 1, f); fwrite("WAVE", 1, 4, f);
+  fwrite("fmt ", 1, 4, f); fwrite(&fmtSize, 4, 1, f); fwrite(&fmt, 4, 1, f);
+  fwrite(&ch16, 2, 1, f); fwrite(&align16, 2, 1, f); fwrite(&srU, 4, 1, f);
+  fwrite(&byteRate, 4, 1, f); fwrite(&align16, 2, 1, f); fwrite(&bits, 2, 1, f);
+  fwrite("data", 1, 4, f); fwrite(&dataSize, 4, 1, f);
+  fwrite(pcm.data(), 2, pcm.size(), f);
+  fclose(f);
+}
+
+// ---------------------------------------------------------------------------
+// Engine: QuickJS DSP context + native Elementary runtime
+
+struct Engine {
+  std::unique_ptr<choc::javascript::Context> js;
+  std::unique_ptr<elem::Runtime<float>> runtime;
+  double sampleRate = 48000.0;
+  int blockSize = 256;
+  std::vector<float> liveScratch; // preallocated deinterleave planes for live mode
+  std::string lastError;
+
+  Engine(double sr, int bs) : sampleRate(sr), blockSize(bs) {
+    liveScratch.assign(2 * (size_t) bs, 0.0f);
+    runtime = std::make_unique<elem::Runtime<float>>(sr, bs);
+    js = choc::javascript::createQuickJSContext();
+
+    js->registerFunction("__postNativeMessage__", [&](choc::javascript::ArgumentList args) {
+      runtime->applyInstructions(elem::js::parseJSON(args[0]->toString()));
+      return choc::value::Value();
+    });
+
+    js->registerFunction("__log__", [&](choc::javascript::ArgumentList args) {
+      for (size_t i = 0; i < args.numArgs; ++i)
+        fprintf(stderr, "[dsp] %s\n", args[i]->toString().c_str());
+      return choc::value::Value();
+    });
+
+    (void) js->evaluate("(function(){ if (typeof globalThis.console === 'undefined') { globalThis.console = { log: (...a) => __log__('[log]', ...a), warn: (...a) => __log__('[warn]', ...a), error: (...a) => __log__('[error]', ...a) }; } })()");
+  }
+
+  bool loadBundle(const std::string& path) {
+    auto contents = choc::file::loadFileAsString(path);
+    if (contents.empty()) { lastError = "cannot read bundle: " + path; return false; }
+    auto rv = js->evaluate(contents);
+    if (rv.isError()) { lastError = "JS error: " + rv.toString(); return false; }
+    return true;
+  }
+
+  // Calls into the exposed __mbira API. Must run on a NON-audio thread.
+  bool call(const std::string& expr) {
+    auto rv = js->evaluate(expr);
+    if (rv.isError()) { lastError = "JS error: " + rv.toString(); return false; }
+    return true;
+  }
+
+  // Audio-thread-equivalent work. runtime.process() uses a lock-free SPSC
+  // queue + atomic shared_ptr swap (see Runtime.h analysis); no JS, no locks.
+  void processAudio(float* const* deinterleaved, size_t numChannels, size_t numFrames) {
+    runtime->process(nullptr, 0, deinterleaved, numChannels, numFrames, nullptr);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Events
+
+struct Event {
+  enum Kind { NoteOn, NoteOff, Param, AllDamp } kind;
+  double t = 0;      // schedule time (seconds) in render mode
+  int note = 0, vel = 0, mode = 0;
+  float value = 0;
+};
+
+static bool dispatchEvent(Engine& eng, const Event& ev) {
+  switch (ev.kind) {
+    case Event::NoteOn:  return eng.call("__mbira.noteOn(" + std::to_string(ev.note) + "," + std::to_string(ev.vel) + ")");
+    case Event::NoteOff: return eng.call("__mbira.noteOff(" + std::to_string(ev.note) + ")");
+    case Event::Param:   return eng.call("__mbira.setModeGain(" + std::to_string(ev.mode) + "," + std::to_string(ev.value) + ")");
+    case Event::AllDamp: return eng.call("__mbira.allNotesDamp()");
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// Render mode
+
+static void runRender(Engine& eng, const std::string& wavPath,
+                      const std::string& eventsJsonText, double durationS) {
+  auto root = choc::json::parse(eventsJsonText);
+  if (root.isError()) { fprintf(stderr, "ERROR: bad events JSON\n"); exit(1); }
+
+  std::vector<Event> events;
+  for (auto& e : root["events"]) {
+    Event ev;
+    std::string type = e["type"].toString();
+    ev.t = (double) e["t"];
+    if (type == "on") { ev.kind = Event::NoteOn; ev.note = (int)(double)e["note"]; ev.vel = (int)(double)e["vel"]; }
+    else if (type == "off") { ev.kind = Event::NoteOff; ev.note = (int)(double)e["note"]; }
+    else if (type == "param") { ev.kind = Event::Param; ev.mode = (int)(double)e["mode"]; ev.value = (float)(double)e["value"]; }
+    else if (type == "alldamp") { ev.kind = Event::AllDamp; }
+    else { fprintf(stderr, "ERROR: unknown event type %s\n", type.c_str()); exit(1); }
+    events.push_back(ev);
+  }
+
+  const size_t block = (size_t) eng.blockSize;
+  const double sr = eng.sampleRate;
+  const size_t numSamples = (size_t)(durationS * sr);
+  std::vector<float> planes(2 * numSamples, 0.0f);
+
+  std::vector<double> latenciesMs;
+  std::vector<size_t> pending; // start positions of note-on latency scans
+  size_t evIdx = 0;
+  double audioLoopMs = 0.0;
+  size_t pos = 0;
+  std::vector<float*> chans { planes.data(), planes.data() + numSamples };
+
+  while (pos < numSamples) {
+    size_t n = std::min(block, numSamples - pos);
+    double nowS = pos / sr;
+
+    // Events scheduled in [nowS, nowS + n/sr) are accepted at the START of
+    // this block (sample index pos) — that is the "event accept" timestamp.
+    while (evIdx < events.size() && events[evIdx].t <= nowS + n / sr) {
+      Event& ev = events[evIdx];
+      if (!dispatchEvent(eng, ev)) { fprintf(stderr, "ERROR: %s\n", eng.lastError.c_str()); exit(1); }
+      if (ev.kind == Event::NoteOn) pending.push_back(pos);
+      ++evIdx;
+    }
+
+    auto t0 = std::chrono::steady_clock::now();
+    eng.processAudio(chans.data(), 2, n);
+    auto t1 = std::chrono::steady_clock::now();
+    audioLoopMs += std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+    const float* L = planes.data();
+    for (auto it = pending.begin(); it != pending.end();) {
+      bool found = false;
+      for (size_t i = it[0]; i < pos + n && i < numSamples; ++i) {
+        if (std::abs(L[i]) > 1e-4f) {
+          latenciesMs.push_back((i - it[0]) * 1000.0 / sr);
+          found = true;
+          break;
+        }
+      }
+      if (found) it = pending.erase(it); else ++it;
+    }
+
+    pos += n;
+  }
+
+  // Interleave and write
+  std::vector<float> interleaved(numSamples * 2);
+  for (size_t i = 0; i < numSamples; ++i) {
+    interleaved[2 * i] = planes[i];
+    interleaved[2 * i + 1] = planes[numSamples + i];
+  }
+  writeWav16(wavPath.c_str(), interleaved.data(), numSamples, 2, eng.sampleRate);
+
+  double med = 0, worst = 0, mean = 0;
+  if (!latenciesMs.empty()) {
+    auto v = latenciesMs;
+    std::sort(v.begin(), v.end());
+    med = v[v.size() / 2];
+    worst = v.back();
+    for (double x : v) mean += x;
+    mean /= v.size();
+  }
+  double cpuPercent = 100.0 * audioLoopMs / (durationS * 1000.0);
+
+  printf("{\"mode\":\"render\",\"wav\":\"%s\",\"rate\":%.0f,\"block\":%d,\"duration_s\":%.2f,"
+         "\"latency_ms\":{\"median\":%.4f,\"mean\":%.4f,\"worst\":%.4f,\"n\":%zu},"
+         "\"audio_loop_cpu_percent\":%.3f}\n",
+         wavPath.c_str(), eng.sampleRate, eng.blockSize, durationS,
+         med, mean, worst, latenciesMs.size(), cpuPercent);
+
+  double peak = 0;
+  for (float x : interleaved) peak = std::max(peak, (double) std::abs(x));
+  fprintf(stderr, "peak_dbfs=%.2f\n", 20.0 * std::log10(std::max(peak, 1e-9)));
+}
+
+// ---------------------------------------------------------------------------
+// Live mode
+
+static int runLive(Engine& eng) {
+  RtAudio dac;
+  if (dac.getDeviceCount() < 1) { fprintf(stderr, "ERROR: no audio devices found\n"); return 1; }
+
+  unsigned int outDev = dac.getDefaultOutputDevice();
+  fprintf(stderr, "Audio device: %s\n", dac.getDeviceInfo(outDev).name.c_str());
+
+  RtAudio::StreamParameters params;
+  params.deviceId = outDev;
+  params.nChannels = 2;
+  params.firstChannel = 0;
+
+  auto audioCb = [](void* outputBuffer, void*, unsigned int nFrames, double, RtAudioStreamStatus, void* userData) -> int {
+    auto* e = (Engine*) userData;
+    float* L = e->liveScratch.data();
+    float* R = e->liveScratch.data() + nFrames;
+    float* chans[2] { L, R };
+    e->processAudio(chans, 2, nFrames);
+    float* out = (float*) outputBuffer;
+    for (size_t i = 0; i < nFrames; ++i) {
+      out[2 * i] = L[i];
+      out[2 * i + 1] = R[i];
+    }
+    return 0;
+  };
+
+  // Service thread: drains the bounded event queue and runs the JS renderer.
+  std::mutex qMutex;
+  std::deque<Event> q;
+  std::atomic<bool> running { true };
+
+  std::thread service([&]() {
+    while (running.load()) {
+      std::deque<Event> batch;
+      { std::lock_guard<std::mutex> lk(qMutex); batch.swap(q); }
+      for (auto& ev : batch)
+        if (!dispatchEvent(eng, ev))
+          fprintf(stderr, "ERROR: %s\n", eng.lastError.c_str());
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+  });
+
+  RtMidiIn midi;
+  try {
+    midi.setCallback([&](double, std::vector<unsigned char>* msg, void*) {
+      if (msg->size() < 2) return;
+      unsigned char status = (*msg)[0] & 0xF0;
+      Event ev;
+      if (status == 0x90 && (*msg)[2] > 0) { ev.kind = Event::NoteOn; ev.note = (*msg)[1]; ev.vel = (*msg)[2]; }
+      else if (status == 0x80 || (status == 0x90 && (*msg)[2] == 0)) { ev.kind = Event::NoteOff; ev.note = (*msg)[1]; }
+      else return;
+      std::lock_guard<std::mutex> lk(qMutex);
+      if (q.size() < 1024) q.push_back(ev); // bounded; PoC drops newest on overflow
+    });
+    midi.openPort(0);
+    fprintf(stderr, "MIDI: port 0 = %s\n", midi.getPortName(0).c_str());
+  } catch (RtMidiError& e) {
+    fprintf(stderr, "MIDI: no input device (%s). The rendered WAVs do not need MIDI.\n", e.getMessage().c_str());
+  }
+
+  RtAudio::StreamOptions opts;
+  opts.flags = RTAUDIO_MINIMIZE_LATENCY;
+  unsigned int frames = (unsigned int) eng.blockSize;
+
+  if (dac.openStream(&params, nullptr, RTAUDIO_FLOAT32, (unsigned int) eng.sampleRate, &frames, audioCb, &eng, &opts)) {
+    fprintf(stderr, "ERROR: dac.openStream: %s\n", dac.getErrorText().c_str());
+    return 1;
+  }
+  dac.startStream();
+  fprintf(stderr, "LIVE: %.0f Hz, block %u frames. Play your MIDI controller. Ctrl+C to quit.\n",
+          eng.sampleRate, frames);
+
+  while (true) std::this_thread::sleep_for(std::chrono::seconds(1));
+  return 0;
+}
+
+// ---------------------------------------------------------------------------
+
+int main(int argc, char** argv) {
+  if (argc < 2) {
+    fprintf(stderr, "usage:\n"
+                    "  mbira-poc render <out.wav> <events.json> [--duration s] [--block N] [--rate SR]\n"
+                    "  mbira-poc live [--block N] [--rate SR]\n");
+    return 2;
+  }
+
+  std::string mode = argv[1];
+  std::string wavPath, eventsPath;
+  double duration = 10.0, rate = 48000.0;
+  int block = 256;
+
+  for (int i = 2; i < argc; ++i) {
+    if (!strcmp(argv[i], "--duration") && i + 1 < argc) duration = atof(argv[++i]);
+    else if (!strcmp(argv[i], "--block") && i + 1 < argc) block = atoi(argv[++i]);
+    else if (!strcmp(argv[i], "--rate") && i + 1 < argc) rate = atof(argv[++i]);
+    else if (mode == "render" && wavPath.empty()) wavPath = argv[i];
+    else if (mode == "render" && eventsPath.empty()) eventsPath = argv[i];
+  }
+
+  Engine eng(rate, block);
+
+  std::string bundle = "build/dsp-bundle.js";
+  if (!eng.loadBundle(bundle)) {
+    fprintf(stderr, "ERROR: %s (run: npm run build:dsp from the repo root)\n", eng.lastError.c_str());
+    return 1;
+  }
+
+  if (mode == "render") {
+    if (wavPath.empty() || eventsPath.empty()) { fprintf(stderr, "render requires <out.wav> <events.json>\n"); return 2; }
+    auto text = choc::file::loadFileAsString(eventsPath);
+    if (text.empty()) { fprintf(stderr, "ERROR: cannot read %s\n", eventsPath.c_str()); return 1; }
+    runRender(eng, wavPath, text, duration);
+    return 0;
+  }
+
+  if (mode == "live") return runLive(eng);
+
+  fprintf(stderr, "unknown mode %s\n", mode.c_str());
+  return 2;
+}

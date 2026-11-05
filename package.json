@@ -1,0 +1,18 @@
+{
+  "name": "mbira",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MBIRA — playable physically modelled virtual mbira on Elementary Audio (Milestone 1 PoC)",
+  "type": "module",
+  "scripts": {
+    "build:dsp": "esbuild src/dsp/index.js --bundle --format=iife --outfile=build/dsp-bundle.js",
+    "test": "node tests/dsp/run.mjs"
+  },
+  "dependencies": {
+    "@elemaudio/core": "4.0.1"
+  },
+  "devDependencies": {
+    "@elemaudio/offline-renderer": "^4.0.3",
+    "esbuild": "0.25.12"
+  }
+}

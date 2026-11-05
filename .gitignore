@@ -1,1 +1,9 @@
-thirdparty/elementary
+thirdparty/
+deps/extract/
+deps/bin/
+node_modules/
+build-native/
+build/
+*.7z
+*.tar.gz
+*.exe
