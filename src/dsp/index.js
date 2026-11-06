@@ -1,152 +1,365 @@
-// MBIRA Milestone 1 — Elementary DSP graph: decaying plucked tine, three damped modes.
+// MBIRA Milestone 2 — Elementary DSP graph: tine, excitation, shared body.
 //
-// Runs inside QuickJS embedded in the native host (the execution model of the
-// official Elementary CLI example). Bundled with esbuild; the host registers
-// `__postNativeMessage__` and evaluates this bundle once. The Renderer callback
-// ships instruction batches to `elem::Runtime::applyInstructions`.
-//
+// Runs inside QuickJS embedded in the native host (same execution model as M1).
 // Continuous parameters and note events are keyed `el.const` nodes: re-rendering
-// the same graph with a changed value makes the reconciler emit SET_PROPERTY for
-// that node only, which the native runtime applies on the non-realtime thread to
-// a lock-free atomic (verified in runtime/elem/builtins/Core.h, ConstNode).
-// No graph rebuild, no runtime restart, no allocation on the audio thread.
+// with changed values makes the reconciler emit SET_PROPERTY for those nodes
+// only (lock-free atomics on the native side). The soundboard / gourd / buzz
+// chain uses STABLE KEYS for its stateful nodes so the same native node
+// instances (and their filter state) persist across re-renders — the shared
+// body state survives note events (spec 4.5).
 //
-// Voice model (PROVISIONAL, Milestone 1 — per amendment 4.7 the modal ratios
-// [1.0, 2.6, 4.2] are the spec's placeholder, not verified acoustics):
+// ----------------------------------------------------------------------------
+// Tine model (spec 3.1)
+//   edge_i(t)  = trig - z(trig)                              // impulse per retrigger
+//   env_i(t)   = norm_i * smooth(tau2pole(tau_i), edge_i)    // exponential decay
+//   mode_i(t)  = gain_i(t) * env_i(t) * sin(2*pi*f*ratio_i*t)
+//   damp(t)    = env(fastAtk, 30ms rel, dampGate)            // note-off release
+//   voice      = master * damp * sum_i mode_i
 //
-//   edge_i(t)  = gate - z(gate)                             // impulse at each note-on edge
-//   env_i(t)   = norm_i * smooth(tau2pole(tau_i), edge_i)   // exponential decay
-//   mode_i(t)  = gain_i * env_i(t) * sin(2*pi*f*ratio_i*t)
-//   damp(t)    = (1/(1-p)) * smooth(tau2pole(0.05), dampGate)  // note-off release
-//   voice      = MASTER * damp * sum_i(mode_i)
+//   Modal ratios: PROVISIONAL-JUSTIFIED (amendment 4.7). An mbira tine is a
+//   clamped-free (cantilever) beam; its mode frequencies follow the beam
+//   eigenvalue squares (beta1..beta3 = 1.875, 4.694, 6.786):
+//       cantilever: ratios [1.0, 6.27, 17.55], fast-decaying upper modes.
+//   This matches the observed character (inharmonic attack overtones that die
+//   out quickly, leaving a near-pure fundamental). The M1 placeholder set
+//   [1.0, 2.6, 4.2] is kept as "classic" for A/B comparison. Per-tine
+//   overrides (setTineOverride) replace any of this per key.
 //
-// gate / dampGate / gain_i are all keyed consts. Retrigger protocol (host side):
-// if gate is already 1, render once with gate=0 before the next gate=1 render so
-// a fresh impulse edge is produced. dampGate returns to 1 before the re-trigger,
-// click-free via its one-pole.
+//   Nyquist suppression: any mode with f * ratio > 0.45 * sampleRate is
+//   omitted (gain 0) with a safety margin; setSampleRate() rebuilds the pool.
+//
+// Excitation (spec 3.2)
+//   v = velocity/127                       // linear amplitude
+//   b = 0.5 + 0.5*v                        // brightness: harder = brighter
+//   base_i      = [1.0, 0.5, 0.28][i]
+//   gain_i      = base_i * v * b^i         // documented brightness curve
+//   pluck w_i   = max(0.10, |sin(pi * (i+1) * p)|)   // pluck position p in [0,1]
+//                 p=0/1 -> tine end (strong upper modes), p=0.5 -> centre
+//   variation   = 1 + 0.04 * (h - 0.5), h = hash(note, trigCount)   // deterministic
+//
+// Shared body (spec 3.3, all PROVISIONAL approximations)
+//   soundboard: ONE 5-band resonator bank (svf bandpass, keyed) on the summed
+//               voice bus; single shared instance, state persists per 4.5.
+//   gourd:      comb (feedback delay) + bandpass at gourdFreq, amount mix,
+//               bypass = amount 0. Driven by the bus (not a static parallel FX).
+//   buzz:       amplitude-gated rattle: tanh(k * env(bus) * bandpass(bus, char)).
+//               Correlated with playing strength; NOT static noise.
 
 import { Renderer, el } from '@elemaudio/core';
 
-const RATIOS = [1.0, 2.6, 4.2];   // modal ratios (PROVISIONAL)
-const TAUS   = [1.2, 0.5, 0.22];  // decay time constants, seconds
-const MASTER = 0.22;              // fixed headroom; documented gain staging (A4)
+const RATIO_SETS = {
+  cantilever: { ratios: [1.0, 6.27, 17.55], taus: [1.2, 0.20, 0.045] },
+  classic:    { ratios: [1.0, 2.6, 4.2],    taus: [1.2, 0.5, 0.22] }, // M1 placeholder, A/B only
+};
+const BASE_GAINS = [1.0, 0.5, 0.28];
+const MASTER_DEFAULT = 0.22;
 
 const core = new Renderer((batch) => {
   __postNativeMessage__(JSON.stringify(batch));
 });
 
-const SAMPLE_RATE = 48000.0; // matches the PoC host device/render rate; fixed for M1
+// Global config; every change re-renders (SET_PROPERTY or rebuild, off audio thread).
+const cfg = {
+  sampleRate: 48000.0,
+  ratioSet: 'cantilever',
+  master: MASTER_DEFAULT,
+  pluckPos: 0.30,        // 0 = tine end, 0.5 = centre, 1 = other end
+  soundboard: 0.35,      // wet amount of the shared resonator bank
+  gourdAmount: 0.30,
+  gourdFreq: 170.0,      // Hz, PROVISIONAL
+  buzzIntensity: 0.0,    // 0..1 (off by default until the player weighs in)
+  buzzChar: 3200.0,      // Hz, PROVISIONAL
+};
 
-// Voice state is the JS-side source of truth for re-renders; the native runtime
-// holds the authoritative live atomic values.
-const voiceState = new Map(); // midiNote -> { freq, gate, damp, gains[3] }
+// Per-tine modal overrides: midiNote -> { ratios?, taus?, gains? } (JSON-driven).
+const tineOverrides = new Map();
+
+// Voice pool: spec 3.1 requires 64 preallocated voices (notes 48..111).
+const POOL_MIN = 48;
+const POOL_MAX = 48 + 64 - 1;
+const voiceState = new Map(); // midiNote -> { freq, trig, damp, gains[3], sustained }
+const voiceOrder = [];        // note-on order for voice stealing
+
+// Sustain pedal (CC64): note-offs while held become pedal-sustained.
+let sustainHeld = false;
+const sustainedNotes = new Set();
+
+function ratiosFor(st) {
+  const ov = tineOverrides.get(st.note);
+  const set = RATIO_SETS[cfg.ratioSet] || RATIO_SETS.cantilever;
+  if (ov && ov.ratios) return { ratios: ov.ratios, taus: ov.taus || set.taus };
+  return { ratios: set.ratios, taus: set.taus };
+}
 
 function ensureState(note) {
   if (!voiceState.has(note)) {
     voiceState.set(note, {
+      note,
       freq: 440.0 * Math.pow(2.0, (note - 69) / 12.0),
-      gate: 0,
       trig: 0,
       damp: 0,
       gains: [0.0, 0.0, 0.0],
+      sustained: false,
     });
   }
   return voiceState.get(note);
 }
 
-function buildVoiceGraph(st) {
-  const note = noteOf(st);
+// Deterministic hash in [0,1) — reproducible tests (spec 3.2).
+function hash01(note, trig) {
+  const s = Math.sin(note * 12.9898 + trig * 78.233) * 43758.5453;
+  return s - Math.floor(s);
+}
 
-  // Edge = trig - z(trig): fires on every INCREMENT of the trigger counter.
-  // (A 0->1 gate pulse cannot retrigger a held note: the 0 and 1 renders both
-  // land inside one audio block, so z(gate) never sees the transition.)
+// Smoothed keyed const: SET_PROPERTY steps become ~30 ms ramps (click-free
+// body-chain parameter changes; voice-side params are smoothed in-graph too).
+function smoothConst(key, value, tau = 0.03) {
+  return el.smooth(el.tau2pole(tau), el.const({ key, value }));
+}
+
+function computeGains(note, velocity, trig) {
+  const st = ensureState(note);
+  const v = Math.max(0.0, Math.min(1.0, velocity / 127.0));
+  const b = 0.5 + 0.5 * v;
+  const h = hash01(note, trig);
+  const variation = 1.0 + 0.04 * (h - 0.5); // +/-2% deterministic amplitude jitter
+  const g = [];
+  for (let i = 0; i < 3; ++i) {
+    const base = BASE_GAINS[i] * v * Math.pow(b, i);
+    const w = Math.max(0.10, Math.abs(Math.sin(Math.PI * (i + 1) * cfg.pluckPos)));
+    const r = ratiosFor(st).ratios[i];
+    // Nyquist suppression with safety margin
+    const audible = st.freq * r < 0.45 * cfg.sampleRate;
+    g.push(audible ? base * w * variation : 0.0);
+  }
+  return g;
+}
+
+function buildVoiceGraph(st) {
+  const note = st.note;
   const trig = el.const({ key: `trig.${note}`, value: st.trig });
-  const edge = el.sub(trig, el.z(trig));
+  const edge = el.sub(trig, el.z(trig)); // fires on every increment of the counter
+  const { ratios, taus } = ratiosFor(st);
 
   const modes = [0, 1, 2].map((i) => {
-    const norm = 1.0 / (1.0 - Math.exp(-1.0 / (TAUS[i] * SAMPLE_RATE)));
-    const env = el.mul(norm, el.smooth(el.tau2pole(TAUS[i]), edge));
+    if (st.gains[i] === 0.0) return el.const({ key: `g${i}.${note}`, value: 0.0 });
+    const norm = 1.0 / (1.0 - Math.exp(-1.0 / (taus[i] * cfg.sampleRate)));
+    const env = el.mul(norm, el.smooth(el.tau2pole(taus[i]), edge));
     return el.mul(
       el.const({ key: `g${i}.${note}`, value: st.gains[i] }),
       env,
-      el.cycle(st.freq * RATIOS[i]),
+      el.cycle(st.freq * ratios[i]),
     );
   });
 
-  const body = el.add(...modes);
-  // Note-off release: el.env is the native asymmetric envelope follower —
-  // near-instant attack when dampGate jumps to 1 at note-on, one-pole release
-  // (tau 30 ms, ~280 ms to -80 dB) when it drops to 0. Click-free both ways.
+  // Note-off release: near-instant attack on damp=1, ~280 ms one-pole to -80 dB.
   const relEnv = el.env(
     el.tau2pole(0.0002),
     el.tau2pole(0.03),
     el.const({ key: `damp.${note}`, value: st.damp }),
   );
-
-  return el.mul(MASTER, relEnv, body);
+  return el.mul(MASTER_DEFAULT, relEnv, el.add(...modes));
 }
 
-function noteOf(st) {
-  return Math.round(69 + 12 * Math.log2(st.freq / 440.0));
+// ---- Shared body chain (stable keys => persistent state, spec 4.5) ---------
+
+// Soundboard: 5 broad bandpass resonators on the summed bus. PROVISIONAL
+// centre frequencies/widths; single shared instance for ALL voices.
+const SB_BANDS = [
+  { fc: 95.0,  q: 4.0, gain: 1.00 },
+  { fc: 210.0, q: 5.0, gain: 0.80 },
+  { fc: 430.0, q: 6.0, gain: 0.55 },
+  { fc: 800.0, q: 6.0, gain: 0.35 },
+  { fc: 1500.0, q: 8.0, gain: 0.20 },
+];
+
+function buildBodyChain(busL, busR) {
+  // The bank runs per channel on mirrored keys; state persists via stable keys.
+  const sbWetL = [], sbWetR = [];
+  for (let i = 0; i < SB_BANDS.length; ++i) {
+    const b = SB_BANDS[i];
+    const fc = el.const({ key: `sb.fc.${i}`, value: b.fc });
+    const q = el.const({ key: `sb.q.${i}`, value: b.q });
+    const g = smoothConst(`sb.gain.${i}`, b.gain * cfg.soundboard);
+    const rL = el.mul(g, el.svf({ key: `sb.svf.${i}.L`, mode: 'bandpass' }, fc, q, busL));
+    const rR = el.mul(g, el.svf({ key: `sb.svf.${i}.R`, mode: 'bandpass' }, fc, q, busR));
+    sbWetL.push(rL); sbWetR.push(rR);
+  }
+  let outL = el.add(busL, el.add(...sbWetL));
+  let outR = el.add(busR, el.add(...sbWetR));
+
+  // Gourd/deze: comb resonator (feedback delay) + bandpass, PROVISIONAL.
+  const gf = el.const({ key: 'gourd.freq', value: cfg.gourdFreq });
+  const gq = el.const({ key: 'gourd.q', value: 6.0 });
+  const ga = smoothConst('gourd.amount', cfg.gourdAmount);
+  const combLen = Math.max(16, Math.round(cfg.sampleRate / 260.0)); // ~260 Hz comb, PROVISIONAL
+  const combL = el.delay({ key: 'gourd.comb.L', size: 4096 }, el.const({ key: 'gourd.len', value: combLen }), el.const({ key: 'gourd.fb', value: 0.45 }), busL);
+  const combR = el.delay({ key: 'gourd.comb.R', size: 4096 }, el.const({ key: 'gourd.len' }), el.const({ key: 'gourd.fb' }), busR);
+  outL = el.add(outL, el.mul(ga, el.svf({ key: 'gourd.svf.L', mode: 'bandpass' }, gf, gq, combL)));
+  outR = el.add(outR, el.mul(ga, el.svf({ key: 'gourd.svf.R', mode: 'bandpass' }, gf, gq, combR)));
+
+  // Buzz: amplitude-gated rattle (PROVISIONAL approximation of the deze buzz).
+  const bi = smoothConst('buzz.intensity', cfg.buzzIntensity);
+  const bc = el.const({ key: 'buzz.char', value: cfg.buzzChar });
+  const bq = el.const({ key: 'buzz.q', value: 2.0 });
+  const bpL = el.svf({ key: 'buzz.svf.L', mode: 'bandpass' }, bc, bq, outL);
+  const bpR = el.svf({ key: 'buzz.svf.R', mode: 'bandpass' }, bc, bq, outR);
+  const gateL = el.env(el.tau2pole(0.0005), el.tau2pole(0.05), outL);
+  const gateR = el.env(el.tau2pole(0.0005), el.tau2pole(0.05), outR);
+  const amtL = el.mul(el.mul(el.const({ key: 'buzz.k', value: 6.0 }), bi), gateL);
+  const amtR = el.mul(el.mul(el.const({ key: 'buzz.k' }), bi), gateR);
+  outL = el.add(outL, el.mul(el.const({ key: 'buzz.mix', value: 0.5 }), el.tanh(el.mul(amtL, bpL))));
+  outR = el.add(outR, el.mul(el.const({ key: 'buzz.mix' }), el.tanh(el.mul(amtR, bpR))));
+
+  return [outL, outR];
 }
 
 function renderAll() {
   const chans = [[], []];
   for (const st of voiceState.values()) {
-    // Same voice graph feeds both channels (mono voices on a stereo bus;
-    // PROVISIONAL — per-tine pan placement comes with the instrument work).
     const g = buildVoiceGraph(st);
     chans[0].push(g);
     chans[1].push(g);
   }
-  core.render(
-    chans[0].length ? el.add(...chans[0]) : el.const({ value: 0.0 }),
-    chans[1].length ? el.add(...chans[1]) : el.const({ value: 0.0 }),
-  );
+  const dryL = chans[0].length ? el.add(...chans[0]) : el.const({ key: 'bus.zero', value: 0.0 });
+  const dryR = chans[1].length ? el.add(...chans[1]) : el.const({ key: 'bus.zero.R', value: 0.0 });
+  const [outL, outR] = buildBodyChain(dryL, dryR);
+  core.render(outL, outR);
 }
 
-// --- public API the host calls ---------------------------------------------
+// ---- voice management (spec 3.4) -------------------------------------------
+
+// Voice stealing: when the polyphony cap is hit, steal in order:
+// oldest released -> oldest pedal-sustained -> newest active.
+// Stolen voices get a quick click-free release (one-pole damp).
+const POLYPHONY_CAP = 64;
+
+function stealIfNeeded() {
+  const active = voiceOrder.filter((n) => {
+    const st = voiceState.get(n);
+    return st && st.trig > 0;
+  });
+  if (active.length <= POLYPHONY_CAP) return;
+  let victim = null;
+  for (const n of voiceOrder) { // oldest released first
+    const st = voiceState.get(n);
+    if (st && st.damp === 0.0 && !st.sustained && st.trig > 0) { victim = n; break; }
+  }
+  if (victim == null) for (const n of voiceOrder) {
+    const st = voiceState.get(n);
+    if (st && st.sustained) { victim = n; break; }
+  }
+  if (victim == null) victim = voiceOrder[voiceOrder.length - 1]; // newest active
+  const st = voiceState.get(victim);
+  st.damp = 0.0; st.sustained = false; st.trig = 0;
+  sustainedNotes.delete(victim);
+}
+
+function releaseNote(note) {
+  const st = voiceState.get(note);
+  if (!st) return;
+  if (sustainHeld) { st.sustained = true; sustainedNotes.add(note); return; }
+  st.damp = 0.0;
+  renderAll();
+}
+
+function releaseSustained() {
+  for (const n of sustainedNotes) {
+    const st = voiceState.get(n);
+    if (st) st.damp = 0.0;
+  }
+  sustainedNotes.clear();
+  renderAll();
+}
+
+// ---- public API the host calls ---------------------------------------------
 
 function noteOn(note, velocity) {
   const st = ensureState(note);
-  const v = velocity / 127.0;
-  const tilt = 0.5 + 0.5 * v; // harder = brighter (PROVISIONAL)
-  st.gains = [v, 0.5 * v * tilt, 0.28 * v * tilt];
+  st.trig += 1;          // every note-on is a fresh impulse edge
+  st.gains = computeGains(note, velocity, st.trig);
   st.damp = 1.0;
-  st.trig += 1; // every note-on is a fresh impulse edge (see buildVoiceGraph)
+  st.sustained = false;
+  sustainedNotes.delete(note);
+  const oi = voiceOrder.indexOf(note);
+  if (oi >= 0) voiceOrder.splice(oi, 1);
+  voiceOrder.push(note);
+  stealIfNeeded();
   renderAll();
 }
 
 function noteOff(note) {
-  if (!voiceState.has(note)) return;
-  ensureState(note).damp = 0.0; // one-pole release (~300 ms to silence), gate stays 1
+  releaseNote(note);
+}
+
+function sustain(pedalDown) {
+  sustainHeld = !!pedalDown;
+  if (!sustainHeld) releaseSustained();
+}
+
+function setParam(name, value) {
+  switch (name) {
+    case 'master': cfg.master = value; break;
+    case 'pluckPos': cfg.pluckPos = value; break;
+    case 'soundboard': cfg.soundboard = value; break;
+    case 'gourdAmount': cfg.gourdAmount = value; break;
+    case 'gourdFreq': cfg.gourdFreq = value; break;
+    case 'buzzIntensity': cfg.buzzIntensity = value; break;
+    case 'buzzChar': cfg.buzzChar = value; break;
+    default: throw new Error(`unknown param: ${name}`);
+  }
   renderAll();
 }
 
-// Continuous parameter (spec 2.1 item 5 / amendment 4.2): re-render with changed
-// const values; the reconciler emits SET_PROPERTY per changed gain const, applied
-// lock-free on the native side during sustained audio.
+// Compatibility with M1 events/tests: mode gains are an alias that scales the
+// documented brightness curve per mode (kept click-free via SET_PROPERTY).
 function setModeGain(modeIndex, value) {
-  for (const st of voiceState.values()) st.gains[modeIndex] = value;
+  const scale = Math.min(4.0, value / Math.max(1e-6, BASE_GAINS[modeIndex]));
+  for (const st of voiceState.values()) {
+    if (st.gains[modeIndex] > 0.0) st.gains[modeIndex] = BASE_GAINS[modeIndex] * scale;
+  }
+  renderAll();
+}
+
+function setRatioSet(name) {
+  if (!RATIO_SETS[name]) throw new Error(`unknown ratio set: ${name}`);
+  cfg.ratioSet = name;
+  renderAll();
+}
+
+function setTineOverride(note, paramsJson) {
+  if (paramsJson == null) tineOverrides.delete(note);
+  else {
+    const cur = tineOverrides.get(note) || {};
+    tineOverrides.set(note, { ...cur, ...JSON.parse(paramsJson) });
+  }
   renderAll();
 }
 
 function allNotesDamp() {
-  for (const st of voiceState.values()) st.damp = 0.0;
+  for (const st of voiceState.values()) { st.damp = 0.0; st.sustained = false; }
+  sustainedNotes.clear();
   renderAll();
 }
 
-// CPU-test helper: shrink the prebuilt voice pool to N notes (notes 48..47+N).
+function configureSampleRate(sr) {
+  cfg.sampleRate = sr;
+  renderAll(); // rebuilds; Nyquist suppression re-evaluated per mode
+}
+
+// CPU-test helper: shrink the prebuilt voice pool to N notes.
 function configurePool(n) {
   const keep = new Set();
-  for (let i = 0; i < n; ++i) keep.add(48 + i);
+  for (let i = 0; i < n; ++i) keep.add(POOL_MIN + i);
   for (const k of [...voiceState.keys()]) if (!keep.has(k)) voiceState.delete(k);
   renderAll();
 }
 
-// Pre-build the pitch range so the initial graph allocation happens up front,
-// off the audio thread, before the device starts.
-for (let n = 48; n <= 84; ++n) ensureState(n);
+// Pre-build the pitch range off the audio thread before the device starts.
+for (let n = POOL_MIN; n <= POOL_MAX; ++n) ensureState(n);
 renderAll();
 
-globalThis.__mbira = { noteOn, noteOff, setModeGain, allNotesDamp, configurePool };
+globalThis.__mbira = {
+  noteOn, noteOff, sustain, setParam, setModeGain, setRatioSet,
+  setTineOverride, allNotesDamp, configureSampleRate, configurePool,
+};

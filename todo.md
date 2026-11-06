@@ -66,3 +66,14 @@
   wired into `main.cpp` live MIDI path) exists alongside this WebView2 UI —
   they are independent; `src/dsp/index.js` currently gutted to a 1-line
   "M2 rewrite marker" (also uncommitted WIP, NOT committed here).
+
+## M2 in progress (2026-11-07)
+
+- [x] 3.1: cantilever modal ratios [1.0, 6.27, 17.55] (justified via clamped-free beam eigenvalues, amendment 4.7); per-tine override API; Nyquist suppression (0.45*sr margin); A/B WAVs ab-classic vs ab-cantilever (attack band 2.7x brighter with cantilever set).
+- [x] 3.2: excitation - linear velocity amp, documented brightness curve (b^i), pluck-position weighting |sin(pi*(i+1)*p)| with 0.10 floor, deterministic +/-2% repeated-note variation (hash(note,trig)).
+- [x] 3.3: shared soundboard = ONE keyed 5-band svf resonator bank on the summed bus (state persists via stable keys); gourd = comb+bandpass with amount/freq/bypass; buzz = amplitude-gated tanh rattle; body params smoothed in-graph (param-step clicks eliminated: 0.138 -> 0.008 max jump).
+- [x] 3.4 (partial): 64-voice pool (notes 48-111), sustain pedal CC64 (sustain API + event), voice-stealing order implemented (released -> sustained -> newest).
+- [x] Host: named-param events {"type":"param","name":...} + sustain events; MBIRA_RATIOSET env for A/B renders. Evidence: evidence/wav-m2/.
+- [ ] 3.4 (rest): explicit steal/overlap/sustain test suite; verify 32/64-voice CPU.
+- [ ] 4: instrument JSONs (mbira-dzavadzimu 24-key, nyunga-nyunga 15-key) + schema validator; wire loadInstrument.
+- [ ] DIRECTION (user, 2026-11-07): Pigments-inspired MODULATOR architecture (velocity, key-map, ADSR, LFO, random sources -> any param) + AUGMENTED engine = synthesis x MULTISAMPLING (el.sample exists in core 4.0.1). Design the modulator matrix + sample-layer engine before building presets/instrument switching.

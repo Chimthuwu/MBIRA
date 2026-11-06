@@ -39,9 +39,9 @@
 #include "elem/Runtime.h"
 
 // RtAudio/RtMidi: WinMM backends on Windows (link winmm)
-#define __WINDOWS_MM__ 1
 #include "RtAudio.h"
 #include "RtMidi.h"
+#include "ui.h"
 
 // ---------------------------------------------------------------------------
 // WAV writer (16-bit PCM stereo)
@@ -131,17 +131,22 @@ struct Engine {
 // Events
 
 struct Event {
-  enum Kind { NoteOn, NoteOff, Param, AllDamp } kind;
+  enum Kind { NoteOn, NoteOff, Param, AllDamp, Sustain } kind;
   double t = 0;      // schedule time (seconds) in render mode
   int note = 0, vel = 0, mode = 0;
   float value = 0;
+  std::string name;  // param name for named-parameter events
 };
 
 static bool dispatchEvent(Engine& eng, const Event& ev) {
   switch (ev.kind) {
     case Event::NoteOn:  return eng.call("__mbira.noteOn(" + std::to_string(ev.note) + "," + std::to_string(ev.vel) + ")");
     case Event::NoteOff: return eng.call("__mbira.noteOff(" + std::to_string(ev.note) + ")");
-    case Event::Param:   return eng.call("__mbira.setModeGain(" + std::to_string(ev.mode) + "," + std::to_string(ev.value) + ")");
+    case Event::Param:
+      if (!ev.name.empty())
+        return eng.call("__mbira.setParam('" + ev.name + "'," + std::to_string(ev.value) + ")");
+      return eng.call("__mbira.setModeGain(" + std::to_string(ev.mode) + "," + std::to_string(ev.value) + ")");
+    case Event::Sustain: return eng.call("__mbira.sustain(" + std::string(ev.value > 0.5f ? "true" : "false") + ")");
     case Event::AllDamp: return ev.note == -1 ? eng.call("__mbira.trigger()") : eng.call("__mbira.allNotesDamp()");
   }
   return false;
@@ -165,7 +170,13 @@ static void runRender(Engine& eng, const std::string& wavPath,
     ev.t = e["t"].get<double>();
     if (type == "on") { ev.kind = Event::NoteOn; ev.note = e["note"].get<int64_t>(); ev.vel = e["vel"].get<int64_t>(); }
     else if (type == "off") { ev.kind = Event::NoteOff; ev.note = e["note"].get<int64_t>(); }
-    else if (type == "param") { ev.kind = Event::Param; ev.mode = e["mode"].get<int64_t>(); ev.value = (float) e["value"].get<double>(); }
+    else if (type == "param") {
+      ev.kind = Event::Param;
+      if (!e["name"].isVoid() && e["name"].isString()) ev.name = e["name"].toString();
+      else ev.mode = e["mode"].get<int64_t>(); // legacy: mode-gain events
+      ev.value = (float) e["value"].get<double>();
+    }
+    else if (type == "sustain") { ev.kind = Event::Sustain; ev.value = (float) e["value"].get<double>(); }
     else if (type == "alldamp") { ev.kind = Event::AllDamp; }
     else if (type == "trigger") { ev.kind = Event::AllDamp; ev.note = -1; } // debug: calls __mbira.trigger()
     else { fprintf(stderr, "ERROR: unknown event type %s\n", type.c_str()); exit(1); }
@@ -259,7 +270,9 @@ static void runRender(Engine& eng, const std::string& wavPath,
 // ---------------------------------------------------------------------------
 // Live mode
 
-static int runLive(Engine& eng) {
+static std::atomic<unsigned> g_xruns { 0 }; // RtAudio under/overflow flags
+
+static int runLive(Engine& eng, bool withUi, double autoQuitS) {
   RtAudio dac;
   if (dac.getDeviceCount() < 1) { fprintf(stderr, "ERROR: no audio devices found\n"); return 1; }
 
@@ -271,8 +284,10 @@ static int runLive(Engine& eng) {
   params.nChannels = 2;
   params.firstChannel = 0;
 
-  auto audioCb = [](void* outputBuffer, void*, unsigned int nFrames, double, RtAudioStreamStatus, void* userData) -> int {
+  auto audioCb = [](void* outputBuffer, void*, unsigned int nFrames, double, RtAudioStreamStatus status, void* userData) -> int {
     auto* e = (Engine*) userData;
+    if (status) g_xruns++;
+    if (nFrames > (unsigned) e->blockSize) nFrames = (unsigned) e->blockSize; // scratch sized for one block
     float* L = e->liveScratch.data();
     float* R = e->liveScratch.data() + nFrames;
     float* chans[2] { L, R };
@@ -302,8 +317,9 @@ static int runLive(Engine& eng) {
   });
 
   RtMidiIn midi;
-  struct MidiBridge { std::mutex* m; std::deque<Event>* q; };
-  MidiBridge bridge { &qMutex, &q };
+  mbira_ui::State uiState;
+  struct MidiBridge { std::mutex* m; std::deque<Event>* q; mbira_ui::State* ui; };
+  MidiBridge bridge { &qMutex, &q, &uiState };
   midi.setCallback([](double, std::vector<unsigned char>* msg, void* userData) {
     if (msg->size() < 2) return;
     auto* b = (MidiBridge*) userData;
@@ -312,6 +328,7 @@ static int runLive(Engine& eng) {
     if (status == 0x90 && (*msg)[2] > 0) { ev.kind = Event::NoteOn; ev.note = (*msg)[1]; ev.vel = (*msg)[2]; }
     else if (status == 0x80 || (status == 0x90 && (*msg)[2] == 0)) { ev.kind = Event::NoteOff; ev.note = (*msg)[1]; }
     else return;
+    if (ev.kind == Event::NoteOn) b->ui->noteOn(ev.note); else b->ui->noteOff(ev.note);
     std::lock_guard<std::mutex> lk(*b->m);
     if (b->q->size() < 1024) b->q->push_back(ev); // bounded; PoC drops newest on overflow
   }, &bridge);
@@ -323,7 +340,10 @@ static int runLive(Engine& eng) {
   }
 
   RtAudio::StreamOptions opts;
-  opts.flags = RTAUDIO_MINIMIZE_LATENCY;
+  // Glitch fix: DirectSound + MINIMIZE_LATENCY + default buffers underran.
+  // 4 buffers (MBIRA_BUFFERS overrides), no MINIMIZE_LATENCY. See docs.
+  opts.flags = 0;
+  opts.numberOfBuffers = getenv("MBIRA_BUFFERS") ? atoi(getenv("MBIRA_BUFFERS")) : 4;
   unsigned int frames = (unsigned int) eng.blockSize;
 
   if (dac.openStream(&params, nullptr, RTAUDIO_FLOAT32, (unsigned int) eng.sampleRate, &frames, audioCb, &eng, &opts)) {
@@ -334,7 +354,23 @@ static int runLive(Engine& eng) {
   fprintf(stderr, "LIVE: %.0f Hz, block %u frames. Play your MIDI controller. Ctrl+C to quit.\n",
           eng.sampleRate, frames);
 
-  while (true) std::this_thread::sleep_for(std::chrono::seconds(1));
+  auto sink = [&](int note, bool on) {
+    Event ev; ev.kind = on ? Event::NoteOn : Event::NoteOff; ev.note = note; ev.vel = 100;
+    std::lock_guard<std::mutex> lk(qMutex);
+    if (q.size() < 1024) q.push_back(ev);
+  };
+  if (withUi) {
+    mbira_ui::run(uiState, sink, autoQuitS);   // returns when the window is closed
+  } else {
+    auto t0 = std::chrono::steady_clock::now();
+    while (autoQuitS <= 0 || std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < autoQuitS)
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+  fprintf(stderr, "xruns=%u\n", g_xruns.load());
+  running = false;
+  service.join();
+  dac.stopStream();
+  if (dac.isStreamOpen()) dac.closeStream();
   return 0;
 }
 
@@ -377,11 +413,22 @@ int main(int argc, char** argv) {
       if (!eng.call("__mbira.configurePool(" + std::to_string(voices) + ")")) {
         fprintf(stderr, "ERROR: %s\n", eng.lastError.c_str()); return 1;
       }
+    if (const char* rs = getenv("MBIRA_RATIOSET"))
+      if (!eng.call(std::string("__mbira.setRatioSet('") + rs + "')")) {
+        fprintf(stderr, "ERROR: %s\n", eng.lastError.c_str()); return 1;
+      }
     runRender(eng, wavPath, text, duration);
     return 0;
   }
 
-  if (mode == "live") return runLive(eng);
+  if (mode == "live") {
+    bool noUi = false; double quitS = 0;
+    for (int i = 2; i < argc; ++i) {
+      if (!strcmp(argv[i], "--no-ui")) noUi = true;
+      else if (!strcmp(argv[i], "--quit-after") && i + 1 < argc) quitS = atof(argv[++i]);
+    }
+    return runLive(eng, !noUi, quitS);
+  }
 
   fprintf(stderr, "unknown mode %s\n", mode.c_str());
   return 2;
