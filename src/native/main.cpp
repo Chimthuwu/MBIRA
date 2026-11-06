@@ -58,12 +58,13 @@ static void writeWav16(const char* path, const float* interleaved, size_t numFra
   if (!f) { fprintf(stderr, "ERROR: cannot open %s for writing\n", path); exit(1); }
   uint32_t dataSize = (uint32_t) (pcm.size() * 2);
   uint32_t chunkSize = 36 + dataSize;
-  uint32_t fmtSize = 16, fmt = 1;
+  uint32_t fmtSize = 16;
   uint32_t srU = (uint32_t) sr, byteRate = (uint32_t)(sr * numChannels * 2);
-  uint16_t bits = 16, ch16 = (uint16_t) numChannels, align16 = (uint16_t)(numChannels * 2);
+  uint16_t bits = 16, ch16 = (uint16_t) numChannels, align16 = (uint16_t)(numChannels * 2), fmt16 = 1;
   fwrite("RIFF", 1, 4, f); fwrite(&chunkSize, 4, 1, f); fwrite("WAVE", 1, 4, f);
-  fwrite("fmt ", 1, 4, f); fwrite(&fmtSize, 4, 1, f); fwrite(&fmt, 4, 1, f);
-  fwrite(&ch16, 2, 1, f); fwrite(&align16, 2, 1, f); fwrite(&srU, 4, 1, f);
+  // fmt chunk: fmtTag(2) channels(2) sampleRate(4) byteRate(4) blockAlign(2) bits(2) = 16 bytes
+  fwrite("fmt ", 1, 4, f); fwrite(&fmtSize, 4, 1, f);
+  fwrite(&fmt16, 2, 1, f); fwrite(&ch16, 2, 1, f); fwrite(&srU, 4, 1, f);
   fwrite(&byteRate, 4, 1, f); fwrite(&align16, 2, 1, f); fwrite(&bits, 2, 1, f);
   fwrite("data", 1, 4, f); fwrite(&dataSize, 4, 1, f);
   fwrite(pcm.data(), 2, pcm.size(), f);
