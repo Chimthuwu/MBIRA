@@ -1,0 +1,5 @@
+{"mode":"render","wav":"evidence/wav/cpu-1.wav","rate":48000,"block":256,"duration_s":10.00,"latency_ms":{"median":0.0000,"mean":0.0208,"worst":0.1042,"n":25},"audio_loop_cpu_percent":5.036}
+{"mode":"render","wav":"evidence/wav/cpu-8.wav","rate":48000,"block":256,"duration_s":10.00,"latency_ms":{"median":0.0000,"mean":0.0208,"worst":0.1042,"n":25},"audio_loop_cpu_percent":8.221}
+{"mode":"render","wav":"evidence/wav/cpu-16.wav","rate":48000,"block":256,"duration_s":10.00,"latency_ms":{"median":0.0000,"mean":0.0108,"worst":0.0833,"n":25},"audio_loop_cpu_percent":11.839}
+{"mode":"render","wav":"evidence/wav/cpu-32.wav","rate":48000,"block":256,"duration_s":10.00,"latency_ms":{"median":0.0000,"mean":0.0050,"worst":0.0833,"n":25},"audio_loop_cpu_percent":14.248}
+{"mode":"render","wav":"evidence/wav/cpu-64.wav","rate":48000,"block":256,"duration_s":10.00,"latency_ms":{"median":0.0000,"mean":0.0000,"worst":0.0000,"n":25},"audio_loop_cpu_percent":17.373}

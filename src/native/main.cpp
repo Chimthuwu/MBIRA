@@ -36,7 +36,7 @@
 #include "choc_javascript.h"
 #include "choc_javascript_QuickJS.h"
 
-#include "Runtime.h"
+#include "elem/Runtime.h"
 
 // RtAudio/RtMidi: WinMM backends on Windows (link winmm)
 #define __WINDOWS_MM__ 1
@@ -74,50 +74,54 @@ static void writeWav16(const char* path, const float* interleaved, size_t numFra
 // Engine: QuickJS DSP context + native Elementary runtime
 
 struct Engine {
-  std::unique_ptr<choc::javascript::Context> js;
+  choc::javascript::Context js;
   std::unique_ptr<elem::Runtime<float>> runtime;
   double sampleRate = 48000.0;
   int blockSize = 256;
   std::vector<float> liveScratch; // preallocated deinterleave planes for live mode
   std::string lastError;
 
-  Engine(double sr, int bs) : sampleRate(sr), blockSize(bs) {
+  Engine(double sr, int bs)
+    : js(choc::javascript::createQuickJSContext()),
+      runtime(std::make_unique<elem::Runtime<float>>(sr, bs)),
+      sampleRate(sr), blockSize(bs) {
     liveScratch.assign(2 * (size_t) bs, 0.0f);
-    runtime = std::make_unique<elem::Runtime<float>>(sr, bs);
-    js = choc::javascript::createQuickJSContext();
 
-    js->registerFunction("__postNativeMessage__", [&](choc::javascript::ArgumentList args) {
-      runtime->applyInstructions(elem::js::parseJSON(args[0]->toString()));
+    js.registerFunction("__postNativeMessage__", [&](choc::javascript::ArgumentList args) {
+      auto text = args[0]->toString();
+      auto rc = runtime->applyInstructions(elem::js::parseJSON(text));
+      if (rc != 0 || getenv("MBIRA_TRACE"))
+        fprintf(stderr, "[native] batch len=%zu rc=%d\n", text.size(), rc);
       return choc::value::Value();
     });
 
-    js->registerFunction("__log__", [&](choc::javascript::ArgumentList args) {
+    js.registerFunction("__log__", [&](choc::javascript::ArgumentList args) {
       for (size_t i = 0; i < args.numArgs; ++i)
         fprintf(stderr, "[dsp] %s\n", args[i]->toString().c_str());
       return choc::value::Value();
     });
 
-    (void) js->evaluate("(function(){ if (typeof globalThis.console === 'undefined') { globalThis.console = { log: (...a) => __log__('[log]', ...a), warn: (...a) => __log__('[warn]', ...a), error: (...a) => __log__('[error]', ...a) }; } })()");
+    (void) js.evaluate("(function(){ if (typeof globalThis.console === 'undefined') { globalThis.console = { log: (...a) => __log__('[log]', ...a), warn: (...a) => __log__('[warn]', ...a), error: (...a) => __log__('[error]', ...a) }; } })()");
   }
 
   bool loadBundle(const std::string& path) {
     auto contents = choc::file::loadFileAsString(path);
     if (contents.empty()) { lastError = "cannot read bundle: " + path; return false; }
-    auto rv = js->evaluate(contents);
-    if (rv.isError()) { lastError = "JS error: " + rv.toString(); return false; }
+    try { (void) js.evaluate(contents); }
+    catch (const choc::javascript::Error& e) { lastError = std::string("JS error: ") + e.what(); return false; }
     return true;
   }
 
   // Calls into the exposed __mbira API. Must run on a NON-audio thread.
   bool call(const std::string& expr) {
-    auto rv = js->evaluate(expr);
-    if (rv.isError()) { lastError = "JS error: " + rv.toString(); return false; }
+    try { (void) js.evaluate(expr); }
+    catch (const choc::javascript::Error& e) { lastError = std::string("JS error: ") + e.what(); return false; }
     return true;
   }
 
   // Audio-thread-equivalent work. runtime.process() uses a lock-free SPSC
   // queue + atomic shared_ptr swap (see Runtime.h analysis); no JS, no locks.
-  void processAudio(float* const* deinterleaved, size_t numChannels, size_t numFrames) {
+  void processAudio(float** deinterleaved, size_t numChannels, size_t numFrames) {
     runtime->process(nullptr, 0, deinterleaved, numChannels, numFrames, nullptr);
   }
 };
@@ -137,7 +141,7 @@ static bool dispatchEvent(Engine& eng, const Event& ev) {
     case Event::NoteOn:  return eng.call("__mbira.noteOn(" + std::to_string(ev.note) + "," + std::to_string(ev.vel) + ")");
     case Event::NoteOff: return eng.call("__mbira.noteOff(" + std::to_string(ev.note) + ")");
     case Event::Param:   return eng.call("__mbira.setModeGain(" + std::to_string(ev.mode) + "," + std::to_string(ev.value) + ")");
-    case Event::AllDamp: return eng.call("__mbira.allNotesDamp()");
+    case Event::AllDamp: return ev.note == -1 ? eng.call("__mbira.trigger()") : eng.call("__mbira.allNotesDamp()");
   }
   return false;
 }
@@ -147,18 +151,22 @@ static bool dispatchEvent(Engine& eng, const Event& ev) {
 
 static void runRender(Engine& eng, const std::string& wavPath,
                       const std::string& eventsJsonText, double durationS) {
-  auto root = choc::json::parse(eventsJsonText);
-  if (root.isError()) { fprintf(stderr, "ERROR: bad events JSON\n"); exit(1); }
+  choc::value::Value root;
+  try { root = choc::json::parse(eventsJsonText); }
+  catch (const choc::json::ParseError& e) { fprintf(stderr, "ERROR: bad events JSON: %s\n", e.what()); exit(1); }
 
   std::vector<Event> events;
-  for (auto& e : root["events"]) {
+  auto eventsArr = root["events"];
+  for (size_t i = 0; i < eventsArr.size(); ++i) {
+    auto e = eventsArr[(int) i];
     Event ev;
     std::string type = e["type"].toString();
-    ev.t = (double) e["t"];
-    if (type == "on") { ev.kind = Event::NoteOn; ev.note = (int)(double)e["note"]; ev.vel = (int)(double)e["vel"]; }
-    else if (type == "off") { ev.kind = Event::NoteOff; ev.note = (int)(double)e["note"]; }
-    else if (type == "param") { ev.kind = Event::Param; ev.mode = (int)(double)e["mode"]; ev.value = (float)(double)e["value"]; }
+    ev.t = e["t"].get<double>();
+    if (type == "on") { ev.kind = Event::NoteOn; ev.note = e["note"].get<int64_t>(); ev.vel = e["vel"].get<int64_t>(); }
+    else if (type == "off") { ev.kind = Event::NoteOff; ev.note = e["note"].get<int64_t>(); }
+    else if (type == "param") { ev.kind = Event::Param; ev.mode = e["mode"].get<int64_t>(); ev.value = (float) e["value"].get<double>(); }
     else if (type == "alldamp") { ev.kind = Event::AllDamp; }
+    else if (type == "trigger") { ev.kind = Event::AllDamp; ev.note = -1; } // debug: calls __mbira.trigger()
     else { fprintf(stderr, "ERROR: unknown event type %s\n", type.c_str()); exit(1); }
     events.push_back(ev);
   }
@@ -173,7 +181,6 @@ static void runRender(Engine& eng, const std::string& wavPath,
   size_t evIdx = 0;
   double audioLoopMs = 0.0;
   size_t pos = 0;
-  std::vector<float*> chans { planes.data(), planes.data() + numSamples };
 
   while (pos < numSamples) {
     size_t n = std::min(block, numSamples - pos);
@@ -189,9 +196,18 @@ static void runRender(Engine& eng, const std::string& wavPath,
     }
 
     auto t0 = std::chrono::steady_clock::now();
-    eng.processAudio(chans.data(), 2, n);
+    // elem::Runtime::process always writes at offset 0 of each channel buffer
+    // (verified against cli/Realtime.cpp), so pass offset pointers per block.
+    float* chans[2] { planes.data() + pos, planes.data() + numSamples + pos };
+    eng.processAudio(chans, 2, n);
     auto t1 = std::chrono::steady_clock::now();
     audioLoopMs += std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+    if (getenv("MBIRA_TRACE")) {
+      float mx = 0;
+      for (size_t i = 0; i < n; ++i) mx = std::max(mx, std::abs(planes[pos + i]));
+      fprintf(stderr, "[trace] block@%zu max=%.6f\n", pos, mx);
+    }
 
     const float* L = planes.data();
     for (auto it = pending.begin(); it != pending.end();) {
@@ -285,17 +301,20 @@ static int runLive(Engine& eng) {
   });
 
   RtMidiIn midi;
+  struct MidiBridge { std::mutex* m; std::deque<Event>* q; };
+  MidiBridge bridge { &qMutex, &q };
+  midi.setCallback([](double, std::vector<unsigned char>* msg, void* userData) {
+    if (msg->size() < 2) return;
+    auto* b = (MidiBridge*) userData;
+    unsigned char status = (*msg)[0] & 0xF0;
+    Event ev;
+    if (status == 0x90 && (*msg)[2] > 0) { ev.kind = Event::NoteOn; ev.note = (*msg)[1]; ev.vel = (*msg)[2]; }
+    else if (status == 0x80 || (status == 0x90 && (*msg)[2] == 0)) { ev.kind = Event::NoteOff; ev.note = (*msg)[1]; }
+    else return;
+    std::lock_guard<std::mutex> lk(*b->m);
+    if (b->q->size() < 1024) b->q->push_back(ev); // bounded; PoC drops newest on overflow
+  }, &bridge);
   try {
-    midi.setCallback([&](double, std::vector<unsigned char>* msg, void*) {
-      if (msg->size() < 2) return;
-      unsigned char status = (*msg)[0] & 0xF0;
-      Event ev;
-      if (status == 0x90 && (*msg)[2] > 0) { ev.kind = Event::NoteOn; ev.note = (*msg)[1]; ev.vel = (*msg)[2]; }
-      else if (status == 0x80 || (status == 0x90 && (*msg)[2] == 0)) { ev.kind = Event::NoteOff; ev.note = (*msg)[1]; }
-      else return;
-      std::lock_guard<std::mutex> lk(qMutex);
-      if (q.size() < 1024) q.push_back(ev); // bounded; PoC drops newest on overflow
-    });
     midi.openPort(0);
     fprintf(stderr, "MIDI: port 0 = %s\n", midi.getPortName(0).c_str());
   } catch (RtMidiError& e) {
@@ -343,7 +362,7 @@ int main(int argc, char** argv) {
 
   Engine eng(rate, block);
 
-  std::string bundle = "build/dsp-bundle.js";
+  std::string bundle = getenv("MBIRA_BUNDLE") ? getenv("MBIRA_BUNDLE") : "build/dsp-bundle.js";
   if (!eng.loadBundle(bundle)) {
     fprintf(stderr, "ERROR: %s (run: npm run build:dsp from the repo root)\n", eng.lastError.c_str());
     return 1;
@@ -353,6 +372,10 @@ int main(int argc, char** argv) {
     if (wavPath.empty() || eventsPath.empty()) { fprintf(stderr, "render requires <out.wav> <events.json>\n"); return 2; }
     auto text = choc::file::loadFileAsString(eventsPath);
     if (text.empty()) { fprintf(stderr, "ERROR: cannot read %s\n", eventsPath.c_str()); return 1; }
+    if (int voices = 0; (voices = getenv("MBIRA_VOICES") ? atoi(getenv("MBIRA_VOICES")) : 0) > 0)
+      if (!eng.call("__mbira.configurePool(" + std::to_string(voices) + ")")) {
+        fprintf(stderr, "ERROR: %s\n", eng.lastError.c_str()); return 1;
+      }
     runRender(eng, wavPath, text, duration);
     return 0;
   }

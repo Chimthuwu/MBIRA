@@ -46,6 +46,7 @@ function ensureState(note) {
     voiceState.set(note, {
       freq: 440.0 * Math.pow(2.0, (note - 69) / 12.0),
       gate: 0,
+      trig: 0,
       damp: 0,
       gains: [0.0, 0.0, 0.0],
     });
@@ -56,8 +57,11 @@ function ensureState(note) {
 function buildVoiceGraph(st) {
   const note = noteOf(st);
 
-  const gate = el.const({ key: `gate.${note}`, value: st.gate });
-  const edge = el.sub(gate, el.z(gate));
+  // Edge = trig - z(trig): fires on every INCREMENT of the trigger counter.
+  // (A 0->1 gate pulse cannot retrigger a held note: the 0 and 1 renders both
+  // land inside one audio block, so z(gate) never sees the transition.)
+  const trig = el.const({ key: `trig.${note}`, value: st.trig });
+  const edge = el.sub(trig, el.z(trig));
 
   const modes = [0, 1, 2].map((i) => {
     const norm = 1.0 / (1.0 - Math.exp(-1.0 / (TAUS[i] * SAMPLE_RATE)));
@@ -109,12 +113,7 @@ function noteOn(note, velocity) {
   const tilt = 0.5 + 0.5 * v; // harder = brighter (PROVISIONAL)
   st.gains = [v, 0.5 * v * tilt, 0.28 * v * tilt];
   st.damp = 1.0;
-
-  if (st.gate === 1) {
-    st.gate = 0;
-    renderAll(); // clear the previous edge first
-  }
-  st.gate = 1;
+  st.trig += 1; // every note-on is a fresh impulse edge (see buildVoiceGraph)
   renderAll();
 }
 
@@ -137,9 +136,17 @@ function allNotesDamp() {
   renderAll();
 }
 
+// CPU-test helper: shrink the prebuilt voice pool to N notes (notes 48..47+N).
+function configurePool(n) {
+  const keep = new Set();
+  for (let i = 0; i < n; ++i) keep.add(48 + i);
+  for (const k of [...voiceState.keys()]) if (!keep.has(k)) voiceState.delete(k);
+  renderAll();
+}
+
 // Pre-build the pitch range so the initial graph allocation happens up front,
 // off the audio thread, before the device starts.
 for (let n = 48; n <= 84; ++n) ensureState(n);
 renderAll();
 
-globalThis.__mbira = { noteOn, noteOff, setModeGain, allNotesDamp };
+globalThis.__mbira = { noteOn, noteOff, setModeGain, allNotesDamp, configurePool };

@@ -1,0 +1,6 @@
+{
+  "events": [
+    { "t": 0.5, "type": "on", "note": 60, "vel": 127 },
+    { "t": 3.5, "type": "off", "note": 60 }
+  ]
+}

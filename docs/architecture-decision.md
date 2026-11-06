@@ -1,6 +1,6 @@
 # MBIRA — Architecture Decision Record
 
-## Milestone 0 feasibility verdict: **GO WITH CONSTRAINTS** *(pending first native build — see constraint C1)*
+## Milestone 0 feasibility verdict: **GO WITH CONSTRAINTS** → **C1 CLEARED: first native build + real render succeeded (see §M1 below)**
 
 **Version under investigation:** `elemaudio/elementary` at commit `60e7234` ("Merge web/offline v4.0.3", 2023-ish line of development; js packages `@elemaudio/core@4.0.1`, `@elemaudio/web-renderer@4.0.3`, `@elemaudio/offline-renderer@4.0.3`; native CMake declares project version `0.11.5`). Licence: **MIT** (LICENSE.md, "MIT License — Copyright (c) 2023 Nick Thompson"). All findings below read directly from that source tree at `thirdparty/elementary`.
 
@@ -56,3 +56,29 @@ CHOC QuickJS (vendored by the official CLI example). Verified in source above.
 ### VST3 decision
 
 Not yet attempted — Milestone 1 spike, bounded by §2.2 exit conditions (4.4).
+
+---
+
+## M1 first technical gate — evidence (2026-11-06)
+
+**C1 cleared.** MinGW-w64 GCC 16.2.0 (WinLibs, pinned; `deps/manifest.json`)
+compiles the host; `build-native/mbira-poc.exe` renders the real
+`elem::Runtime<float>` graph produced by the DSP JS context
+(`src/dsp/index.js` → esbuild → QuickJS → `__postNativeMessage__` →
+`applyInstructions`). GATE 1 items:
+
+1. ✅ Real Elementary graph from the DSP JS context executes in the native runtime (initial batch 95,179 bytes, rc=0; subsequent event batches rc=0).
+2. ✅ Decaying 3-mode plucked tine (evidence/wav/note-soft.wav, note-hard.wav, phrase.wav).
+3. ✅ Continuous audio at device rate — `live` mode (RtAudio WinMM/MME); offline render path identical.
+4. ✅ Notes trigger via documented test input (JSON events); MIDI path implemented (RtMidi) but UNVERIFIED — no MIDI device probed yet.
+5. ✅ Amendment 4.2: repeated `setModeGain` changes during a sustained note (param-sweep.wav). Mechanism: keyed `el.const` re-render → SET_PROPERTY-only batches (983–1026 bytes, no CREATE_NODE, no ACTIVATE_ROOTS) → `ConstNode::setProperty` lock-free atomic. Measurable output change: RMS −17.1 vs −25.3 vs −50.0 dBFS etc. (see evidence/RECORDING-MANIFEST.md). Audio never stopped; no runtime restart.
+6. ✅ Threading per §1.2 table above; render mode single-threaded (event dispatch + process interleaved on one thread — same guarantee, simpler); live mode: MIDI thread → bounded queue → service thread (JS + applyInstructions); audio callback = runtime.process() only.
+7. ✅ Amendment 4.3: latency over 120 notes: in-block median 0 ms, worst 0.042 ms (128-block) / ~0.1 ms (256); total software latency = one block scheduling worst case (2.67/5.33 ms). Device round-trip NOT measured (no loopback) — UNVERIFIED.
+8. ✅ CPU (48 kHz, 256 block, audio-loop wall time): 1 voice 5.0%, 8 voices 8.2%, 32 voices 14.2%, 37 voices (prebuilt pool max in M1) 17.4% — under the 30% target. Method: sum of process() wall time / rendered duration; measures the audio render process only, offline loop.
+9. ✅ WAVs + manifest + this doc + docs/how-to-run.md.
+
+**M1 design findings:**
+- `Runtime::process` writes at offset 0 of each channel buffer every call (verified vs `cli/Realtime.cpp` DeviceProxy) — host must pass per-block offset pointers.
+- Same-note retriggering via gate 0→1 within one block does NOT produce an edge (both renders land in the same block; `z(gate)` never sees the transition). Fixed with a monotonically increasing trigger counter const (`trig.<note>`); edge = trig − z(trig) fires on every increment. Documented in src/dsp/index.js.
+- RootNode fade (fadeInMs/fadeOutMs 20 ms) applies only on root activation, not on SET_PROPERTY — parameter updates are click-free by construction.
+
