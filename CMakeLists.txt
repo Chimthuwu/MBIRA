@@ -11,8 +11,8 @@ set(RTMIDI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/deps/extract/rtmidi-6.0.0)
 
 add_library(rtaudio STATIC ${RTAUDIO_DIR}/RtAudio.cpp)
 target_include_directories(rtaudio PUBLIC ${RTAUDIO_DIR})
-target_compile_definitions(rtaudio PRIVATE __WINDOWS_MM__=1)
-target_link_libraries(rtaudio PUBLIC winmm)
+target_compile_definitions(rtaudio PRIVATE __WINDOWS_DS__=1)
+target_link_libraries(rtaudio PUBLIC winmm dsound)
 
 add_library(rtmidi STATIC ${RTMIDI_DIR}/RtMidi.cpp)
 target_include_directories(rtmidi PUBLIC ${RTMIDI_DIR})
