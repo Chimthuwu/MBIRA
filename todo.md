@@ -37,3 +37,10 @@
 - Voice pool prebuilds notes 48-84 (37 voices) in M1; 64-voice preallocation is M2 voice-manager work.
 - Live mode runs forever (no clean shutdown handler) - fine for a PoC; polish in M3 standalone.
 - Release conventions: use js/core 4.0.1 + native runtime from the SAME repo commit (60e7234); never mix with the CLI example stale npm pin (^3.2).
+
+## Final status (2026-11-06)
+
+- [x] M1 VST3 spike: direct VST3 VIABLE - SDK validator 47/47 passed, smoke host produced real audio (-10.7 dBFS). No JUCE fallback. See evidence/vst3-spike.md.
+- [x] M1: architecture-decision.md finished (VST3 decision + verified licences in LICENSES.md).
+- [x] M1 COMPLETE - STOPPING per Part A section 1. Final report delivered in chat.
+- Open for human: listen to evidence/wav/*.wav; run docs/vst3-host-test-checklist.md in Ableton; provide MIDI device/loopMIDI; answer Steinberg licence + tuning questions (4.9).

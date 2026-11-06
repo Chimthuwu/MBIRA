@@ -7,3 +7,4 @@ build/
 *.7z
 *.tar.gz
 *.exe
+build-vst3/

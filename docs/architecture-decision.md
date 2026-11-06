@@ -53,9 +53,18 @@ CHOC QuickJS (vendored by the official CLI example). Verified in source above.
 - Elementary: MIT — read from `thirdparty/elementary/LICENSE.md`.
 - Remaining (CHOC, QuickJS, RtAudio, RtMidi, VST3 SDK): to be verified from actual licence files at pin time; recorded in `deps/manifest.json` and `LICENSES.md`.
 
-### VST3 decision
+### VST3 decision (M1 spike, 2026-11-06)
 
-Not yet attempted — Milestone 1 spike, bounded by §2.2 exit conditions (4.4).
+**Direct VST3 integration: VIABLE — no JUCE fallback needed for M1.**
+
+Evidence (built + run, see `evidence/vst3-spike.md`):
+- Minimal plugin (`src/vst3/MbiraPlugin.cpp`) embeds the SAME engine as the standalone (choc QuickJS + `elem::Runtime<float>`, DSP bundle compiled into the binary via CMake raw-string).
+- **Steinberg VST3 SDK validator: 47 tests passed, 0 failed** (`build-vst3/bin/validator.exe build-vst3/vst3/MBIRA.vst3`) — plugin loads, initialises, processes audio with note events, state save/restore exercised by the validator.
+- **Smoke host: real audio from a note-on** — `{"peak":0.292264,"peak_dbfs":-10.68,"ok":true}` (48 kHz / 256, 1 s).
+
+Spike-scope simplifications (documented, to close in M2/M3): no editor, no exposed automation parameter yet (validator covers note-on + state; parameter plumbing is M2), event latency up to ~1 service-thread ms + block, float32 only. MinGW compatibility fixes needed: `_aligned_malloc` shim in the SDK's alignedalloc.h, `-municode` for the validator. WebView2 child-window viability: NOT tested (UNVERIFIED — M3 editor spike, per amendment 4.10).
+
+Steinberg VST3 SDK licence is dual GPL3/proprietary — flagged in LICENSES.md as a pre-distribution decision for the human.
 
 ---
 
