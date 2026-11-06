@@ -28,7 +28,10 @@ target_include_directories(mbira-poc PRIVATE
 target_link_libraries(mbira-poc PRIVATE rtaudio rtmidi)
 # MinGW: link stdc++exp? not needed; chrono/thread come with winpthreads (posix threads build)
 if(MINGW)
-  target_link_libraries(mbira-poc PRIVATE winmm ole32 ws2_32 -static-libgcc -static-libstdc++)
+  target_link_libraries(mbira-poc PRIVATE winmm ole32 ws2_32)
+  # Fully static: the desktop shortcut runs outside the WinLibs PATH, so no
+  # MinGW runtime DLLs (libwinpthread-1.dll etc.) may be needed at load time.
+  target_link_options(mbira-poc PRIVATE -static)
   target_compile_options(mbira-poc PRIVATE -O2)
 endif()
 
