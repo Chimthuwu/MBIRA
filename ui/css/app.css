@@ -12,11 +12,13 @@ kbd{
   border:1px solid var(--line); border-radius:var(--r-s);
   padding:1px 4px; color:var(--text-2);
 }
+/* hidden mechanism wins over .view display (brief: verify against CSS) */
+[hidden]{ display:none !important; }
 
 /* ── shell ─────────────────────────────────────────────── */
 .app{
   display:grid;
-  grid-template-rows:auto minmax(0,1fr) auto auto;
+  grid-template-rows:auto auto minmax(0,1fr) auto;
   height:100vh; min-height:420px;
 }
 
@@ -30,8 +32,8 @@ kbd{
 .brand{display:flex;align-items:baseline;gap:var(--sp-2)}
 .brand__mark{
   width:10px;height:18px;border-radius:2px;align-self:center;
-  background:linear-gradient(var(--accent-hot),var(--accent-dim));
-  box-shadow:0 0 10px -2px var(--accent);
+  background:linear-gradient(var(--tine-2),var(--tine-0));
+  box-shadow:inset 1px 0 0 rgba(255,255,255,.35), inset -1px 0 0 rgba(0,0,0,.45);
 }
 .brand__name{font-size:var(--fs-19);letter-spacing:.14em;font-weight:600}
 .brand__sub{font-size:var(--fs-11);color:var(--text-3);letter-spacing:.08em}
@@ -45,7 +47,7 @@ kbd{
   background:var(--panel); border:1px solid var(--line);
   border-radius:var(--r-m); padding:5px 10px; min-width:230px;
 }
-.select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.select:focus-visible{outline:2px solid var(--sel);outline-offset:1px}
 
 .btn{
   font:var(--fs-12) var(--font-ui); color:var(--text);
@@ -58,14 +60,39 @@ kbd{
 .btn--warn{color:var(--warn);border-color:var(--accent-dim)}
 .btn--icon{padding:6px 9px}
 
-/* ── stage ─────────────────────────────────────────────── */
-.stage{
-  display:grid;
-  grid-template-rows:minmax(0,3fr) minmax(0,2fr) auto;
-  gap:var(--sp-3); padding:var(--sp-3); min-height:0;
+/* ── page navigation ───────────────────────────────────── */
+.nav{
+  display:flex; gap:var(--sp-1); align-items:center;
+  padding:var(--sp-2) var(--sp-4);
+  background:var(--bg-1); border-bottom:1px solid var(--line);
 }
+.nav__btn{
+  font:var(--fs-12) var(--font-ui); color:var(--text-2);
+  background:transparent; border:1px solid transparent;
+  border-radius:var(--r-m); padding:5px 14px; cursor:pointer;
+  display:inline-flex; gap:7px; align-items:center;
+  transition:color var(--t-up) var(--ease-out), background var(--t-up) var(--ease-out),
+             border-color var(--t-up) var(--ease-out);
+}
+.nav__btn:hover{color:var(--text);background:var(--panel-hi)}
+.nav__btn[aria-current="page"]{
+  color:var(--sel); border-color:var(--sel-dim);
+  background:color-mix(in srgb, var(--sel-dim) 18%, var(--bg-1));
+}
+.nav__btn:focus-visible{outline:2px solid var(--sel);outline-offset:1px}
+/* current indicator stays neutral (--sel) — never amber (energy-only) */
 
-/* ── hero keyboard ─────────────────────────────────────── */
+/* ── page region ───────────────────────────────────────── */
+.views{ min-height:0; position:relative; }
+.view{
+  position:absolute; inset:0;
+  display:grid; gap:var(--sp-3); padding:var(--sp-3);
+  min-height:0; overflow:auto;
+}
+/* default hidden via [hidden]; .view is laid out when visible */
+
+/* PLAY — hero + master/meter */
+.view--play{ grid-template-rows:minmax(0,1fr) auto; }
 .keyboard-wrap{min-height:0;display:flex}
 .board{
   position:relative; flex:1; min-height:0; overflow:hidden;
@@ -83,11 +110,12 @@ kbd{
     rgba(255,255,255,.03) 7px 8px, transparent 8px 19px);
   mix-blend-mode:overlay;
 }
-/* resonant board glow — one element, positioned via CSS vars */
+/* resonant board glow — amber = energy (strike wash). token-based colour */
 .board__glow{
   position:absolute; inset:0; pointer-events:none;
   background:radial-gradient(220px 160px at var(--gx,50%) var(--gy,60%),
-             rgba(240,166,60,.30), rgba(240,166,60,0) 70%);
+             color-mix(in srgb, var(--accent) 30%, transparent),
+             transparent 70%);
   opacity:var(--gop,0);
   transition:opacity var(--t-glow) var(--ease-out);
 }
@@ -98,6 +126,8 @@ kbd{
   box-shadow:0 3px 10px -4px #000;
 }
 .tines{position:absolute; inset:0}
+
+.playrow{ display:flex; gap:var(--sp-3); align-items:flex-end; }
 
 /* ── tine key ──────────────────────────────────────────── */
 .tine{
@@ -118,12 +148,10 @@ kbd{
   touch-action:none;
   -webkit-tap-highlight-color:transparent;
 }
-/* mount nub at the bridge */
 .tine::before{
   content:""; position:absolute; left:-3px; right:-3px; top:-5px; height:7px;
   background:linear-gradient(#3a2a1d,#1a120c); border-radius:2px;
 }
-/* tone index tick */
 .tine::after{
   content:""; position:absolute; left:50%; bottom:9%; width:2px; height:14%;
   translate:-50% 0; border-radius:2px;
@@ -131,7 +159,7 @@ kbd{
 }
 
 .tine:hover{ filter:brightness(1.12); }
-.tine:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+.tine:focus-visible{ outline:2px solid var(--sel); outline-offset:2px; }
 
 .tine.is-on{
   transform:translateY(-2px) scaleY(.995);
@@ -139,7 +167,7 @@ kbd{
   box-shadow:
     inset 1px 0 0 rgba(255,255,255,.55),
     inset -1px 0 0 rgba(0,0,0,.45),
-    0 0 0 1px rgba(255,213,138,.55),
+    0 0 0 1px color-mix(in srgb, var(--accent-hot) 55%, transparent),
     0 0 18px -2px var(--accent),
     0 0 46px -8px var(--accent);
   transition-duration:var(--t-down);
@@ -150,13 +178,9 @@ kbd{
 }
 
 /* ── panels ────────────────────────────────────────────── */
-.panels{
-  display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);
-  gap:var(--sp-3); min-height:0;
-}
 .panel{
   display:flex; flex-direction:column; gap:var(--sp-3);
-  min-height:0; overflow:hidden;
+  min-height:0;
   padding:var(--sp-3);
   background:linear-gradient(var(--panel),var(--bg-2));
   border:1px solid var(--line); border-radius:var(--r-l);
@@ -167,7 +191,7 @@ kbd{
 }
 
 /* faders */
-.fader-row{display:flex;gap:var(--sp-4)}
+.fader-row{display:flex;gap:var(--sp-4);flex-wrap:wrap}
 .fader{display:flex;flex-direction:column;gap:var(--sp-1);min-width:0}
 .fader__label{font-size:var(--fs-11);color:var(--text-2)}
 .fader__val{font:var(--fs-11) var(--font-num);color:var(--text-3)}
@@ -178,7 +202,7 @@ kbd{
 }
 .range::-webkit-slider-runnable-track{
   height:6px; border-radius:3px;
-  background:linear-gradient(90deg,var(--accent-dim),var(--line-hi));
+  background:linear-gradient(90deg,var(--sel-dim),var(--line-hi));
   box-shadow:inset 0 1px 2px #000;
 }
 .range::-webkit-slider-thumb{
@@ -187,9 +211,7 @@ kbd{
   background:linear-gradient(var(--tine-2),var(--tine-0));
   box-shadow:0 1px 3px rgba(0,0,0,.8);
 }
-.range:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px}
-
-.strip__bottom{display:flex;gap:var(--sp-3);align-items:flex-end;margin-top:auto}
+.range:focus-visible{outline:2px solid var(--sel);outline-offset:3px;border-radius:6px}
 
 /* meter */
 .meter{display:flex;gap:3px;height:64px;align-items:flex-end}
@@ -216,18 +238,20 @@ kbd{
   box-shadow:0 2px 6px -1px #000, inset 0 1px 0 rgba(255,255,255,.3);
   cursor:grab; touch-action:none;
 }
-.knob__dial::after{ /* pointer */
+.knob__dial::after{ /* pointer — neutral (--sel), not amber */
   content:""; position:absolute; left:50%; top:5px; width:2px; height:13px;
-  translate:-50% 0; border-radius:2px; background:var(--accent-hot);
-  box-shadow:0 0 6px -1px var(--accent);
+  translate:-50% 0; border-radius:2px; background:var(--sel);
   transform-origin:50% 18px;
   transform:rotate(var(--rot,-135deg));
 }
 .knob__dial:active{cursor:grabbing}
-.knob__dial:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.knob__dial:focus-visible{outline:2px solid var(--sel);outline-offset:3px}
 .knob__label{font-size:var(--fs-11);color:var(--text-3)}
 
-.scope{width:100%;height:64px;margin-top:auto;border-radius:var(--r-m);background:#080706;border:1px solid var(--line)}
+.scope{
+  width:100%; height:72px; margin-top:auto;
+  border-radius:var(--r-m); background:#080706; border:1px solid var(--line);
+}
 
 /* ── fx rack ───────────────────────────────────────────── */
 .fx{display:flex;gap:var(--sp-2);flex-wrap:wrap}
@@ -243,6 +267,15 @@ kbd{
   box-shadow:0 0 12px -6px var(--accent);
 }
 .insert--add{opacity:.35;cursor:not-allowed}
+
+/* ── samples empty state ───────────────────────────────── */
+.samples{ display:flex; flex-direction:column; gap:var(--sp-3);
+  padding:var(--sp-3); background:linear-gradient(var(--panel),var(--bg-2));
+  border:1px dashed var(--line-hi); border-radius:var(--r-l); }
+.samples__empty{ flex:1; display:flex; flex-direction:column; justify-content:center;
+  align-items:center; text-align:center; gap:var(--sp-2); padding:var(--sp-5); }
+.samples__title{ font-size:var(--fs-15); color:var(--text-2); margin:0; }
+.note{ font-size:var(--fs-11); color:var(--text-3); margin:0; line-height:1.5; max-width:46ch; }
 
 /* ── status bar ────────────────────────────────────────── */
 .statusbar{
@@ -260,8 +293,8 @@ kbd{
 
 /* ── narrow DAW windows ────────────────────────────────── */
 @media (max-width:900px){
-  .panels{grid-template-columns:1fr}
-  .stage{grid-template-rows:minmax(0,1fr) minmax(0,1fr) auto}
+  .view--play{ grid-template-rows:minmax(0,1fr) auto; }
+  .playrow{ flex-wrap:wrap; }
 }
 @media (max-width:560px){
   .topbar__mid{display:none}

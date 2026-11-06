@@ -75,9 +75,10 @@ export function mountKeyboard(root, board){
 
   function noteOff(el){
     const midi = +el.dataset.midi;
-    if (!held.delete(midi)) return;
+    if (!held.delete(midi)) return false;
     paintOff(el);
     send('note.off', { note: midi, velocity: 0 });
+    return true;
   }
 
   function allOff(){
@@ -139,9 +140,35 @@ export function mountKeyboard(root, board){
   // safety: lose focus → all notes off
   window.addEventListener('blur', allOff);
 
+  // ── release only LOCALLY held notes (page switch) ─────
+  // Sends one note.off per unique locally-held tine (pointer+keyboard).
+  // Does NOT panic, does NOT touch host-driven notes. Clears pointer capture
+  // and the local maps so a later physical keyup/pointerup is a no-op.
+  function releaseLocal(){
+    const seen = new Set();
+    const els = [];
+    for (const pid of byPointer.keys()){
+      const el = byPointer.get(pid);
+      if (!el) continue;
+      try { if (el.hasPointerCapture && el.hasPointerCapture(pid)) el.releasePointerCapture(pid); } catch (_) {}
+      if (!seen.has(el)) { seen.add(el); els.push(el); }
+    }
+    for (const el of byKey.values()){
+      if (!seen.has(el)) { seen.add(el); els.push(el); }
+    }
+    let sent = 0;
+    for (const el of els){
+      if (noteOff(el)) sent++;
+    }
+    byPointer.clear();
+    byKey.clear();
+    return sent;
+  }
+
   // ── host-driven note state (MIDI in, automation) ───────
   return {
     els,
+    releaseLocal,
     setHostNote(midi, on, velocity = 100){
       const el = els.find((e) => +e.dataset.midi === midi);
       if (!el) return;

@@ -68,9 +68,10 @@ export function mountKnobs(root){
 }
 
 /* ── meter + scope (telemetry-driven; mock when offline) ─── */
-export function mountTelemetry(meterEl, canvas){
+export function mountTelemetry(meterEl, canvas, isScopeVisible = () => true){
   const ctx = canvas.getContext('2d', { alpha: true });
   let l = 0, r = 0, phase = 0, amp = 0;
+  let raf = 0;
 
   const fills = meterEl.querySelectorAll('.meter__fill');
 
@@ -84,8 +85,11 @@ export function mountTelemetry(meterEl, canvas){
   }
 
   function frame(){
-    requestAnimationFrame(frame);
+    raf = requestAnimationFrame(frame);
     if (document.visibilityState !== 'visible') return;
+    // scope only draws on the Tine page; otherwise pause in place so the
+    // waveform phase survives page switches (Play → Tine → Play).
+    if (!isScopeVisible()) return;
 
     // decay
     amp *= 0.985;
@@ -105,6 +109,6 @@ export function mountTelemetry(meterEl, canvas){
     ctx.stroke();
   }
 
-  requestAnimationFrame(frame);
+  frame();
   return { push };
 }
