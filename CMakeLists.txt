@@ -28,9 +28,10 @@ target_include_directories(mbira-poc PRIVATE
 target_link_libraries(mbira-poc PRIVATE rtaudio rtmidi)
 # MinGW: link stdc++exp? not needed; chrono/thread come with winpthreads (posix threads build)
 if(MINGW)
-  target_link_libraries(mbira-poc PRIVATE winmm ole32 ws2_32)
+  target_link_libraries(mbira-poc PRIVATE winmm ole32 ws2_32 -static-libgcc -static-libstdc++)
   target_compile_options(mbira-poc PRIVATE -O2)
 endif()
+
 
 # ---------------------------------------------------------------------------
 # MBIRA VST3 plugin (Milestone 1 spike) + VST3 SDK validator
@@ -67,6 +68,8 @@ if(EXISTS ${VST3SDK_DIR}/public.sdk/source/vst/vstaudioeffect.h)
   target_link_libraries(mbira_vst3 PRIVATE sdk base)
   target_compile_definitions(mbira_vst3 PRIVATE MBIRA_VST3=1)
   target_compile_options(mbira_vst3 PRIVATE -O2 -fpermissive)
+  # Static MinGW runtime: hosts can't see libstdc++-6/libgcc_s/libwinpthread on PATH
+  target_link_options(mbira_vst3 PRIVATE -static-libgcc -static-libstdc++ -static)
   set_target_properties(mbira_vst3 PROPERTIES PREFIX "")
   # Bundle layout: MBIRA.vst3/Contents/x86_64-win/MBIRA.vst3 (the DLL)
   set_target_properties(mbira_vst3 PROPERTIES
