@@ -132,7 +132,9 @@ inline LRESULT CALLBACK proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
         else c->level[n] -= dt / (c->st->held[n].load() ? 0.3f : 0.1f);
         if (c->level[n] < 0) c->level[n] = 0;
       }
-      InvalidateRect(h, nullptr, FALSE); return 0;
+      RECT rc; GetClientRect(h, &rc);
+      RECT tines { 0, 0, rc.right, rc.bottom - PANEL_H };
+      InvalidateRect(h, &tines, FALSE); return 0;
     }
     case WM_HSCROLL: {
       HWND src = (HWND) lp;
@@ -201,7 +203,7 @@ inline LRESULT CALLBACK proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
           c->bmp = CreateCompatibleBitmap(wdc, W, rc.bottom); c->bw = W; c->bh = rc.bottom;
         }
         HDC dc = CreateCompatibleDC(wdc); HGDIOBJ old = SelectObject(dc, c->bmp);
-        HBRUSH bg = CreateSolidBrush(RGB(28, 22, 18)); RECT full = rc; FillRect(dc, &full, bg); DeleteObject(bg);
+        HBRUSH bg = CreateSolidBrush(RGB(28, 22, 18)); RECT full { 0, 0, W, H }; FillRect(dc, &full, bg); DeleteObject(bg);
         int rowH = (H - 60) / 3;
         HBRUSH bar = CreateSolidBrush(RGB(90, 70, 50));
         for (int r = 0; r < 3; ++r) { RECT b { 10, 30 + r * rowH - 8, W - 10, 30 + r * rowH }; FillRect(dc, &b, bar); }
@@ -216,7 +218,7 @@ inline LRESULT CALLBACK proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
           SelectObject(dc, ob); DeleteObject(br);
         }
         SelectObject(dc, op); DeleteObject(pen);
-        BitBlt(wdc, 0, 0, W, rc.bottom, dc, 0, 0, SRCCOPY);
+        BitBlt(wdc, 0, 0, W, H, dc, 0, 0, SRCCOPY); // tine area ONLY - never over the panel
         SelectObject(dc, old); DeleteDC(dc);
       }
       EndPaint(h, &ps); return 0;
@@ -237,7 +239,7 @@ inline int run(State& st, std::function<void(int, bool)> sink,
   WNDCLASSA wc {}; wc.lpfnWndProc = proc; wc.hInstance = GetModuleHandleA(nullptr);
   wc.hCursor = LoadCursorA(nullptr, IDC_ARROW); wc.lpszClassName = "MbiraWnd";
   RegisterClassA(&wc);
-  HWND h = CreateWindowExA(0, "MbiraWnd", "MBIRA", WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+  HWND h = CreateWindowExA(0, "MbiraWnd", "MBIRA", WS_OVERLAPPEDWINDOW | WS_VISIBLE | WS_CLIPCHILDREN,
                            CW_USEDEFAULT, CW_USEDEFAULT, 1000, 640, nullptr, nullptr, wc.hInstance, nullptr);
   if (!h) return 1;
   SetWindowLongPtrA(h, GWLP_USERDATA, (LONG_PTR) &ctx);
