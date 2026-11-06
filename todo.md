@@ -77,3 +77,5 @@
 - [ ] 3.4 (rest): explicit steal/overlap/sustain test suite; verify 32/64-voice CPU.
 - [ ] 4: instrument JSONs (mbira-dzavadzimu 24-key, nyunga-nyunga 15-key) + schema validator; wire loadInstrument.
 - [ ] DIRECTION (user, 2026-11-07): Pigments-inspired MODULATOR architecture (velocity, key-map, ADSR, LFO, random sources -> any param) + AUGMENTED engine = synthesis x MULTISAMPLING (el.sample exists in core 4.0.1). Design the modulator matrix + sample-layer engine before building presets/instrument switching.
+- [x] UI (interim Win32): control panel with pluck/master sliders, SOUNDBOARD enable+amount, GOURD enable+amount+freq, BUZZ enable+intensity+character, cantilever/classic toggle; params flow through the live event queue (Raw events) to the service thread. UI smoke test clean (0 xruns). WebView2 editor still pending (design agents).
+- [x] MIDI: RtMidi now OPENS port 0 (microKEY-37 detected in live boot). Actual playing still needs human test.

@@ -54,3 +54,20 @@ fundamental ring, quick ~300 ms damp release on note-off. In `param-sweep.wav`
 the timbre of a held note audibly changes as each mode's gain is swept.
 
 Judgement of whether it sounds like an mbira is yours (agent cannot listen).
+
+## Control panel (M2)
+
+`live` (with UI) now has a physical-model control panel under the tine keyboard:
+
+- **Pluck position** (0 = tine end, 0.5 = centre, 1 = other end) - changes how
+  bright the NEXT note-on is.
+- **Master** volume.
+- **SOUNDBOARD (resonator)** - the shared 5-band body resonator bank; Enable
+  toggle + amount. Off = dry tines.
+- **GOURD (deze)** - Enable + amount + frequency (80-400 Hz). Off = bypassed.
+- **BUZZ** - Enable + intensity + character (rattle tone centre). Off by default.
+- **Tine: cantilever / classic** button - A/B the modal ratio sets
+  (cantilever = justified physics default, classic = M1 placeholder).
+
+All controls go through the same bounded event queue as MIDI (service thread
+runs the JS renderer; audio thread untouched). All parameters PROVISIONAL.

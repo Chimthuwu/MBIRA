@@ -131,7 +131,7 @@ struct Engine {
 // Events
 
 struct Event {
-  enum Kind { NoteOn, NoteOff, Param, AllDamp, Sustain } kind;
+  enum Kind { NoteOn, NoteOff, Param, AllDamp, Sustain, Raw } kind;
   double t = 0;      // schedule time (seconds) in render mode
   int note = 0, vel = 0, mode = 0;
   float value = 0;
@@ -148,6 +148,7 @@ static bool dispatchEvent(Engine& eng, const Event& ev) {
       return eng.call("__mbira.setModeGain(" + std::to_string(ev.mode) + "," + std::to_string(ev.value) + ")");
     case Event::Sustain: return eng.call("__mbira.sustain(" + std::string(ev.value > 0.5f ? "true" : "false") + ")");
     case Event::AllDamp: return ev.note == -1 ? eng.call("__mbira.trigger()") : eng.call("__mbira.allNotesDamp()");
+    case Event::Raw:     return eng.call(ev.name); // pre-built JS expression (UI params)
   }
   return false;
 }
@@ -360,7 +361,14 @@ static int runLive(Engine& eng, bool withUi, double autoQuitS) {
     if (q.size() < 1024) q.push_back(ev);
   };
   if (withUi) {
-    mbira_ui::run(uiState, sink, autoQuitS);   // returns when the window is closed
+    // UI parameter changes go through the same bounded queue as MIDI, so the
+    // service thread (never the UI thread) runs the JS renderer.
+    auto paramSink = [&](const std::string& expr) {
+      Event ev; ev.kind = Event::Raw; ev.name = expr;
+      std::lock_guard<std::mutex> lk(qMutex);
+      if (q.size() < 1024) q.push_back(ev);
+    };
+    mbira_ui::run(uiState, sink, paramSink, autoQuitS);   // returns when the window is closed
   } else {
     auto t0 = std::chrono::steady_clock::now();
     while (autoQuitS <= 0 || std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < autoQuitS)
