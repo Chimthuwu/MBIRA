@@ -19,7 +19,7 @@
 namespace mbira_ui {
 
 constexpr int kLo = 48, kHi = 84, kN = kHi - kLo + 1;
-constexpr int PANEL_H = 320;   // control panel strip at the bottom
+constexpr int PANEL_H = 350;   // control panel strip at the bottom
 
 struct KeyGeom { int note; float x, y, len; };  // schematic coords (canvas units)
 
@@ -74,7 +74,9 @@ enum {
   ID_TR_PLUCK = 100, ID_TR_MASTER, ID_TR_SB, ID_TR_GOURD, ID_TR_GOURDF, ID_TR_BUZZ, ID_TR_BUZZC,
   ID_CB_SB, ID_CB_GOURD, ID_CB_BUZZ,
   ID_BTN_RATIO,
-  // modulator framework row
+  // macros row (the locked identity: Resonance / Buzz / Brightness)
+  ID_TR_MAC_RES, ID_TR_MAC_BUZZ, ID_TR_MAC_BRIGHT,
+  // dev row (engine internals, not the product UI)
   ID_TR_ADSR_A, ID_TR_ADSR_R, ID_TR_ADSR_S, ID_TR_LFO_RATE, ID_TR_LFO_PITCH, ID_TR_LFO_MASTER, ID_TR_RANDOM, ID_TR_VELB,
 };
 
@@ -145,26 +147,36 @@ inline void buildPanel(HWND h, Ctx* c, int W, int H) {
                   710, py + 22, 140, 26, h, (HMENU)(INT_PTR) ID_BTN_RATIO, GetModuleHandleA(nullptr), nullptr);
   mkLabel(h, "PROVISIONAL physical model", 710, py + 60, 210);
 
-  // ---- modulator row -------------------------------------------------------
+  // ---- macros row (the three UI-facing knobs) ------------------------------
   int my = py + 118;
-  mkLabel(h, "MODULATORS", 14, my, 120);
-  mkLabel(h, "ADSR attack", 14, my + 18, 90);
-  mkTrack(h, ID_TR_ADSR_A, 14, my + 36, 140, 0, 100, 0);      // 0.2 ms .. 500 ms
-  mkLabel(h, "Release", 14, my + 70, 90);
-  mkTrack(h, ID_TR_ADSR_R, 14, my + 88, 140, 0, 100, 1);      // 5 ms .. 2 s
-  mkLabel(h, "Sustain", 170, my + 18, 70);
-  mkTrack(h, ID_TR_ADSR_S, 170, my + 36, 120, 0, 100, 100);   // 0..1
-  mkLabel(h, "LFO rate", 170, my + 70, 70);
-  mkTrack(h, ID_TR_LFO_RATE, 170, my + 88, 120, 1, 100, 10);  // 0.1 .. 20 Hz
-  mkLabel(h, "LFO->Pitch", 310, my + 18, 90);
-  mkTrack(h, ID_TR_LFO_PITCH, 310, my + 36, 130, 0, 100, 0);  // depth (semitone-ish)
-  mkLabel(h, "LFO->Master", 310, my + 70, 100);
-  mkTrack(h, ID_TR_LFO_MASTER, 310, my + 88, 130, 0, 100, 0); // tremolo depth
-  mkLabel(h, "Random", 460, my + 18, 80);
-  mkTrack(h, ID_TR_RANDOM, 460, my + 36, 120, 0, 100, 4);     // per-note jitter
-  mkLabel(h, "Vel->Bright", 460, my + 70, 90);
-  mkTrack(h, ID_TR_VELB, 460, my + 88, 120, 0, 200, 100);     // velocity brightness depth
-  mkLabel(h, "Diefinition: LFO->Pitch depth 100 = +/- ~1 semitone. Defaults = no modulation.", 14, my + 122, 620);
+  mkLabel(h, "MACROS", 14, my, 120);
+  mkLabel(h, "Resonance", 14, my + 18, 90);
+  mkTrack(h, ID_TR_MAC_RES, 14, my + 36, 140, 0, 100, 50);
+  mkLabel(h, "Buzz", 170, my + 18, 60);
+  mkTrack(h, ID_TR_MAC_BUZZ, 170, my + 36, 120, 0, 100, 50);
+  mkLabel(h, "Brightness", 310, my + 18, 90);
+  mkTrack(h, ID_TR_MAC_BRIGHT, 310, my + 36, 130, 0, 100, 50);
+
+  // ---- dev row: engine internals (not part of the product UI design) -------
+  int dy = my + 78;
+  mkLabel(h, "DEV: mod sources", 14, dy, 120);
+  mkLabel(h, "ADSR attack", 14, dy + 18, 90);
+  mkTrack(h, ID_TR_ADSR_A, 14, dy + 36, 140, 0, 100, 0);      // 0.2 ms .. 500 ms
+  mkLabel(h, "Release", 14, dy + 70, 90);
+  mkTrack(h, ID_TR_ADSR_R, 14, dy + 88, 140, 0, 100, 1);      // 5 ms .. 2 s
+  mkLabel(h, "Sustain", 170, dy + 18, 70);
+  mkTrack(h, ID_TR_ADSR_S, 170, dy + 36, 120, 0, 100, 100);   // 0..1
+  mkLabel(h, "LFO rate", 170, dy + 70, 70);
+  mkTrack(h, ID_TR_LFO_RATE, 170, dy + 88, 120, 1, 100, 10);  // 0.1 .. 20 Hz
+  mkLabel(h, "LFO->Pitch", 310, dy + 18, 90);
+  mkTrack(h, ID_TR_LFO_PITCH, 310, dy + 36, 130, 0, 100, 0);  // depth (semitone-ish)
+  mkLabel(h, "LFO->Master", 310, dy + 70, 100);
+  mkTrack(h, ID_TR_LFO_MASTER, 310, dy + 88, 130, 0, 100, 0); // tremolo depth
+  mkLabel(h, "Random", 460, dy + 18, 80);
+  mkTrack(h, ID_TR_RANDOM, 460, dy + 36, 120, 0, 100, 4);     // per-note jitter
+  mkLabel(h, "Vel->Bright", 460, dy + 70, 90);
+  mkTrack(h, ID_TR_VELB, 460, dy + 88, 120, 0, 200, 100);     // velocity brightness depth
+  mkLabel(h, "DEV ONLY - not the product UI. Macros above map: resonance->soundboard+gourd, buzz->rattle, brightness->overtone tilt.", 14, dy + 122, 640);
 }
 
 inline void sendParam(HWND h, Ctx* c, const char* name, double value) {
@@ -203,6 +215,9 @@ inline LRESULT CALLBACK proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
         case ID_TR_GOURDF: sendParam(h, c, "gourdFreq", (double) pos); break;
         case ID_TR_BUZZ:   c->lastBuzz = pos; sendParam(h, c, "buzzIntensity", pos / 100.0); break;
         case ID_TR_BUZZC:  sendParam(h, c, "buzzChar", (double) pos); break;
+        case ID_TR_MAC_RES: sendParam(h, c, "macro.resonance", sliderMs(h, ID_TR_MAC_RES, 0, 1)); break;
+        case ID_TR_MAC_BUZZ: sendParam(h, c, "macro.buzz", sliderMs(h, ID_TR_MAC_BUZZ, 0, 1)); break;
+        case ID_TR_MAC_BRIGHT: sendParam(h, c, "macro.brightness", sliderMs(h, ID_TR_MAC_BRIGHT, 0, 1)); break;
         case ID_TR_ADSR_A: sendParam(h, c, "adsr.attack", 0.0002 + 0.5 * sliderMs(h, ID_TR_ADSR_A, 0, 100)); break;
         case ID_TR_ADSR_R: sendParam(h, c, "adsr.release", 0.005 + 2.0 * sliderMs(h, ID_TR_ADSR_R, 0, 100)); break;
         case ID_TR_ADSR_S: sendParam(h, c, "adsr.sustain", sliderMs(h, ID_TR_ADSR_S, 0, 1)); break;

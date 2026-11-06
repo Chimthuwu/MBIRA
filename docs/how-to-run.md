@@ -98,3 +98,11 @@ Defaults reproduce the M1 sound exactly (within ~0.4 dB from the master-bus
 move). The interim Win32 panel has a MODULATORS row with these controls;
 the WebView2 UI should build the full routing matrix on this param set.
 Evidence: evidence/wav-m2/mod-tremolo.wav, mod-pitch.wav, mod-adsr.wav.
+
+## Macros (the UI-facing knobs)
+
+`macro.resonance` (soundboard band gains + gourd amount), `macro.buzz`
+(rattle intensity), `macro.brightness` (overtone tilt). All 0..1, 0.5
+neutral. These are the three knobs the product UI's Play page will show;
+per the locked identity there is NO modulator matrix in the UI - ADSR/LFO/
+random/velocity params are engine internals for per-parameter mod strips.

@@ -78,6 +78,8 @@ const cfg = {
   mod: { lfoToMaster: 0.0, lfoToPitch: 0.0 },            // route depths
   random: { amount: 0.04 },                              // per-note variation depth
   vel: { amp: 1.0, bright: 1.0 },                        // velocity->amp/brightness depths
+  // --- macros (the UI-facing sound-shaping knobs; 0..1, 0.5 = neutral) ------
+  macro: { resonance: 0.5, buzz: 0.5, brightness: 0.5 },
 };
 
 // Per-tine modal overrides: midiNote -> { ratios?, taus?, gains? } (JSON-driven).
@@ -130,11 +132,12 @@ function computeGains(note, velocity, trig) {
   const st = ensureState(note);
   const v = Math.max(0.0, Math.min(1.0, velocity / 127.0)) * cfg.vel.amp;
   const b = 0.5 + 0.5 * Math.min(1.0, v * cfg.vel.bright);
+  const bTilt = 1.5 - cfg.macro.brightness; // macro 1.0 = brighter (smaller exponent, b<1)
   const h = hash01(note, trig);
   const variation = 1.0 + cfg.random.amount * (h - 0.5); // deterministic per-note jitter
   const g = [];
   for (let i = 0; i < 3; ++i) {
-    const base = BASE_GAINS[i] * v * Math.pow(b, i);
+    const base = BASE_GAINS[i] * v * Math.pow(b, i * bTilt);
     const w = Math.max(0.10, Math.abs(Math.sin(Math.PI * (i + 1) * cfg.pluckPos)));
     const r = ratiosFor(st).ratios[i];
     // Nyquist suppression with safety margin
@@ -197,7 +200,8 @@ function buildBodyChain(busL, busR) {
     const b = SB_BANDS[i];
     const fc = el.const({ key: `sb.fc.${i}`, value: b.fc });
     const q = el.const({ key: `sb.q.${i}`, value: b.q });
-    const g = smoothConst(`sb.gain.${i}`, b.gain * cfg.soundboard);
+    const rm = 2.0 * cfg.macro.resonance; // 0 .. 2, 1 at the neutral 0.5
+    const g = smoothConst(`sb.gain.${i}`, b.gain * cfg.soundboard * rm);
     const rL = el.mul(g, el.svf({ key: `sb.svf.${i}.L`, mode: 'bandpass' }, fc, q, busL));
     const rR = el.mul(g, el.svf({ key: `sb.svf.${i}.R`, mode: 'bandpass' }, fc, q, busR));
     sbWetL.push(rL); sbWetR.push(rR);
@@ -208,7 +212,7 @@ function buildBodyChain(busL, busR) {
   // Gourd/deze: comb resonator (feedback delay) + bandpass, PROVISIONAL.
   const gf = el.const({ key: 'gourd.freq', value: cfg.gourdFreq });
   const gq = el.const({ key: 'gourd.q', value: 6.0 });
-  const ga = smoothConst('gourd.amount', cfg.gourdAmount);
+  const ga = smoothConst('gourd.amount', cfg.gourdAmount * (2.0 * cfg.macro.resonance));
   const combLen = Math.max(16, Math.round(cfg.sampleRate / 260.0)); // ~260 Hz comb, PROVISIONAL
   const combL = el.delay({ key: 'gourd.comb.L', size: 4096 }, el.const({ key: 'gourd.len', value: combLen }), el.const({ key: 'gourd.fb', value: 0.45 }), busL);
   const combR = el.delay({ key: 'gourd.comb.R', size: 4096 }, el.const({ key: 'gourd.len' }), el.const({ key: 'gourd.fb' }), busR);
@@ -216,7 +220,7 @@ function buildBodyChain(busL, busR) {
   outR = el.add(outR, el.mul(ga, el.svf({ key: 'gourd.svf.R', mode: 'bandpass' }, gf, gq, combR)));
 
   // Buzz: amplitude-gated rattle (PROVISIONAL approximation of the deze buzz).
-  const bi = smoothConst('buzz.intensity', cfg.buzzIntensity);
+  const bi = smoothConst('buzz.intensity', cfg.buzzIntensity * (2.0 * cfg.macro.buzz));
   const bc = el.const({ key: 'buzz.char', value: cfg.buzzChar });
   const bq = el.const({ key: 'buzz.q', value: 2.0 });
   const bpL = el.svf({ key: 'buzz.svf.L', mode: 'bandpass' }, bc, bq, outL);
@@ -387,6 +391,9 @@ function setParam(name, value) {
     case 'random.amount': cfg.random.amount = value; break;
     case 'vel.amp': cfg.vel.amp = value; break;
     case 'vel.bright': cfg.vel.bright = value; break;
+    case 'macro.resonance': cfg.macro.resonance = Math.max(0.0, Math.min(1.0, value)); break;
+    case 'macro.buzz': cfg.macro.buzz = Math.max(0.0, Math.min(1.0, value)); break;
+    case 'macro.brightness': cfg.macro.brightness = Math.max(0.0, Math.min(1.0, value)); break;
     default: throw new Error(`unknown param: ${name}`);
   }
   renderAll();
