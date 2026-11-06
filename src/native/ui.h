@@ -13,15 +13,21 @@
 #include <functional>
 #include <string>
 #include <cstdio>
+#include <vector>
+#include <algorithm>
 
 namespace mbira_ui {
 
 constexpr int kLo = 48, kHi = 84, kN = kHi - kLo + 1;
 constexpr int PANEL_H = 210;   // control panel strip at the bottom
 
+struct KeyGeom { int note; float x, y, len; };  // schematic coords (canvas units)
+
 struct State {
   std::atomic<unsigned> onCount[128] {};   // bumped on every note-on (retrigger-safe)
   std::atomic<bool> held[128] {};
+  std::vector<KeyGeom> geom;               // from the loaded instrument (empty = legacy layout)
+  float canvasW = 800.0f, canvasH = 300.0f;
   void noteOn(int n)  { if (n >= 0 && n < 128) { held[n] = true; onCount[n]++; } }
   void noteOff(int n) { if (n >= 0 && n < 128) held[n] = false; }
 };
@@ -30,7 +36,19 @@ struct State {
 // left->right with the rows interleaved and staggered by a third of a slot
 // (approximate mbira look, not a historical tuning). Higher pitch = shorter tine.
 struct Rect { int x, y, w, h; };
-inline Rect tineRect(int note, int W, int H) {
+inline Rect tineRect(const State& st, int note, int W, int H) {
+  if (!st.geom.empty()) {
+    // instrument-driven schematic layout: fit the canvas into the tine area
+    const int tineH = H - PANEL_H;
+    double s = std::min((W - 40.0) / st.canvasW, (tineH - 50.0) / st.canvasH);
+    for (const auto& k : st.geom)
+      if (k.note == note) {
+        int w = std::max(6, (int)(k.len * s * 0.35));
+        int h = std::max(18, (int)(k.len * s * 0.9));
+        return { 20 + (int)(k.x * s), 15 + (int)(k.y * s), w, h };
+      }
+    return { -1, -1, 0, 0 };
+  }
   int i = note - kLo, row = i % 3, slot = i / 3;           // slot 0..12
   double slotW = (W - 40.0) / 13.0;
   int w = (int)(slotW * 0.62);
@@ -58,9 +76,16 @@ enum {
   ID_BTN_RATIO,
 };
 
-inline int hit(int mx, int my, int W, int H) {
+inline int hit(const State& st, int mx, int my, int W, int H) {
+  if (!st.geom.empty()) {
+    for (size_t i = st.geom.size(); i-- > 0;) {
+      Rect r = tineRect(st, st.geom[i].note, W, H);
+      if (mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h) return st.geom[i].note;
+    }
+    return -1;
+  }
   for (int n = kHi; n >= kLo; --n) {
-    Rect r = tineRect(n, W, H);
+    Rect r = tineRect(st, n, W, H);
     if (mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h) return n;
   }
   return -1;
@@ -183,7 +208,7 @@ inline LRESULT CALLBACK proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
       RECT rc; GetClientRect(h, &rc);
       int my = HIWORD(lp);
       if (my >= rc.bottom - PANEL_H) break; // clicks in the panel area are for controls
-      int n = hit(LOWORD(lp), my, rc.right, rc.bottom);
+      int n = hit(*c->st, LOWORD(lp), my, rc.right, rc.bottom);
       if (n >= 0) { c->mouseNote = n; SetCapture(h); c->st->noteOn(n); c->sink(n, true); }
       return 0;
     }
@@ -209,13 +234,18 @@ inline LRESULT CALLBACK proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
         for (int r = 0; r < 3; ++r) { RECT b { 10, 30 + r * rowH - 8, W - 10, 30 + r * rowH }; FillRect(dc, &b, bar); }
         DeleteObject(bar);
         HPEN pen = CreatePen(PS_SOLID, 1, RGB(20, 20, 20)); HGDIOBJ op = SelectObject(dc, pen);
-        for (int n = kLo; n <= kHi; ++n) {
-          float l = c->level[n]; Rect r = tineRect(n, W, rc.bottom);
+        auto drawTine = [&](int n, Rect r) {
+          float l = c->level[n];
           int rr = 90 + (int)(165 * l), gg = 95 + (int)(150 * l), bb = 105 - (int)(60 * l);
           HBRUSH br = CreateSolidBrush(RGB(rr > 255 ? 255 : rr, gg > 255 ? 255 : gg, bb));
           HGDIOBJ ob = SelectObject(dc, br);
           RoundRect(dc, r.x, r.y, r.x + r.w, r.y + r.h, 8, 8);
           SelectObject(dc, ob); DeleteObject(br);
+        };
+        if (!c->st->geom.empty()) {
+          for (const auto& k : c->st->geom) drawTine(k.note, tineRect(*c->st, k.note, W, rc.bottom));
+        } else {
+          for (int n = kLo; n <= kHi; ++n) drawTine(n, tineRect(*c->st, n, W, rc.bottom));
         }
         SelectObject(dc, op); DeleteObject(pen);
         BitBlt(wdc, 0, 0, W, H, dc, 0, 0, SRCCOPY); // tine area ONLY - never over the panel

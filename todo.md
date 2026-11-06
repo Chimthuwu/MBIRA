@@ -79,3 +79,7 @@
 - [ ] DIRECTION (user, 2026-11-07): Pigments-inspired MODULATOR architecture (velocity, key-map, ADSR, LFO, random sources -> any param) + AUGMENTED engine = synthesis x MULTISAMPLING (el.sample exists in core 4.0.1). Design the modulator matrix + sample-layer engine before building presets/instrument switching.
 - [x] UI (interim Win32): control panel with pluck/master sliders, SOUNDBOARD enable+amount, GOURD enable+amount+freq, BUZZ enable+intensity+character, cantilever/classic toggle; params flow through the live event queue (Raw events) to the service thread. UI smoke test clean (0 xruns). WebView2 editor still pending (design agents).
 - [x] MIDI: RtMidi now OPENS port 0 (microKEY-37 detected in live boot). Actual playing still needs human test.
+- [x] 4 (core): src/instruments/ schema.json + mbira-dzavadzimu.json (24 keys, 3 ranks) + nyunga-nyunga.json (15 keys, spec 4.2 coords), per-key modal ratios/taus/amplitudes/excitationSensitivity, per-instrument soundboard/gourd/buzz config; validator tests/instruments/validate.mjs wired into npm test.
+- [x] DSP loadInstrument(jsonText): voice pool rebuilds from instrument key list, per-tine overrides, body reconfig. Host loads at startup (MBIRA_INSTRUMENT env) and feeds schematic geometry to the UI keyboard. Evidence: inst-dzavadzimu.wav vs inst-nyunga.wav (audibly distinct).
+- [ ] Modulator framework (Pigments-style: velocity/keymap/ADSR/LFO/random sources -> params) - next core chunk.
+- [ ] UI: instrument selector; mod page; sample-layer strip (augmented engine).

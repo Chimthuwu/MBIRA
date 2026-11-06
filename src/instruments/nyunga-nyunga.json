@@ -1,0 +1,441 @@
+{
+ "name": "Nyunga Nyunga",
+ "id": "nyunga-nyunga",
+ "type": "lamellophone",
+ "keyCount": 15,
+ "provisional": true,
+ "canvas": {
+  "width": 600,
+  "height": 300
+ },
+ "layoutNote": "Coordinates from spec section 4.2 (schematic starting point)",
+ "keys": [
+  {
+   "note": 60,
+   "name": "C4",
+   "frequencyHz": 261.63,
+   "rank": 1,
+   "x": 100,
+   "y": 105,
+   "lengthPx": 120,
+   "group": "mid",
+   "modalRatios": [
+    1.0,
+    6.3062,
+    17.6043
+   ],
+   "dampingTaus": [
+    1.2023,
+    0.2004,
+    0.0451
+   ],
+   "amplitudes": [
+    1.0059,
+    0.503,
+    0.2817
+   ],
+   "excitationSensitivity": 0.9
+  },
+  {
+   "note": 62,
+   "name": "D4",
+   "frequencyHz": 293.66,
+   "rank": 1,
+   "x": 160,
+   "y": 100,
+   "lengthPx": 115,
+   "group": "mid",
+   "modalRatios": [
+    0.9968,
+    6.2339,
+    17.5518
+   ],
+   "dampingTaus": [
+    1.2017,
+    0.2003,
+    0.0451
+   ],
+   "amplitudes": [
+    0.9955,
+    0.4977,
+    0.2787
+   ],
+   "excitationSensitivity": 1.11
+  },
+  {
+   "note": 64,
+   "name": "E4",
+   "frequencyHz": 329.63,
+   "rank": 1,
+   "x": 220,
+   "y": 96,
+   "lengthPx": 110,
+   "group": "mid",
+   "modalRatios": [
+    1.0054,
+    6.2949,
+    17.4927
+   ],
+   "dampingTaus": [
+    1.1949,
+    0.1991,
+    0.0448
+   ],
+   "amplitudes": [
+    1.0017,
+    0.5009,
+    0.2805
+   ],
+   "excitationSensitivity": 1.02
+  },
+  {
+   "note": 65,
+   "name": "F4",
+   "frequencyHz": 349.23,
+   "rank": 1,
+   "x": 280,
+   "y": 94,
+   "lengthPx": 105,
+   "group": "mid",
+   "modalRatios": [
+    0.994,
+    6.2638,
+    17.6454
+   ],
+   "dampingTaus": [
+    1.207,
+    0.2012,
+    0.0453
+   ],
+   "amplitudes": [
+    1.0016,
+    0.5008,
+    0.2804
+   ],
+   "excitationSensitivity": 0.93
+  },
+  {
+   "note": 67,
+   "name": "G4",
+   "frequencyHz": 392.0,
+   "rank": 1,
+   "x": 340,
+   "y": 96,
+   "lengthPx": 100,
+   "group": "mid",
+   "modalRatios": [
+    1.0047,
+    6.2556,
+    17.4455
+   ],
+   "dampingTaus": [
+    1.1932,
+    0.1989,
+    0.0447
+   ],
+   "amplitudes": [
+    0.9956,
+    0.4978,
+    0.2788
+   ],
+   "excitationSensitivity": 1.14
+  },
+  {
+   "note": 69,
+   "name": "A4",
+   "frequencyHz": 440.0,
+   "rank": 1,
+   "x": 400,
+   "y": 100,
+   "lengthPx": 95,
+   "group": "mid",
+   "modalRatios": [
+    0.9979,
+    6.3006,
+    17.6319
+   ],
+   "dampingTaus": [
+    1.2045,
+    0.2007,
+    0.0452
+   ],
+   "amplitudes": [
+    1.0059,
+    0.5029,
+    0.2817
+   ],
+   "excitationSensitivity": 1.05
+  },
+  {
+   "note": 71,
+   "name": "B4",
+   "frequencyHz": 493.88,
+   "rank": 1,
+   "x": 460,
+   "y": 105,
+   "lengthPx": 90,
+   "group": "mid",
+   "modalRatios": [
+    0.9988,
+    6.2325,
+    17.5156
+   ],
+   "dampingTaus": [
+    1.1992,
+    0.1999,
+    0.045
+   ],
+   "amplitudes": [
+    0.9944,
+    0.4972,
+    0.2784
+   ],
+   "excitationSensitivity": 0.96
+  },
+  {
+   "note": 72,
+   "name": "C5",
+   "frequencyHz": 523.25,
+   "rank": 2,
+   "x": 80,
+   "y": 175,
+   "lengthPx": 100,
+   "group": "high",
+   "modalRatios": [
+    1.0,
+    6.3062,
+    17.6043
+   ],
+   "dampingTaus": [
+    1.022,
+    0.1703,
+    0.0383
+   ],
+   "amplitudes": [
+    1.0059,
+    0.503,
+    0.2817
+   ],
+   "excitationSensitivity": 0.9
+  },
+  {
+   "note": 74,
+   "name": "D5",
+   "frequencyHz": 587.33,
+   "rank": 2,
+   "x": 140,
+   "y": 169,
+   "lengthPx": 96,
+   "group": "high",
+   "modalRatios": [
+    0.9968,
+    6.2339,
+    17.5518
+   ],
+   "dampingTaus": [
+    1.0214,
+    0.1702,
+    0.0383
+   ],
+   "amplitudes": [
+    0.9955,
+    0.4977,
+    0.2787
+   ],
+   "excitationSensitivity": 1.11
+  },
+  {
+   "note": 76,
+   "name": "E5",
+   "frequencyHz": 659.26,
+   "rank": 2,
+   "x": 200,
+   "y": 165,
+   "lengthPx": 92,
+   "group": "high",
+   "modalRatios": [
+    1.0054,
+    6.2949,
+    17.4927
+   ],
+   "dampingTaus": [
+    1.0156,
+    0.1693,
+    0.0381
+   ],
+   "amplitudes": [
+    1.0017,
+    0.5009,
+    0.2805
+   ],
+   "excitationSensitivity": 1.02
+  },
+  {
+   "note": 77,
+   "name": "F5",
+   "frequencyHz": 698.46,
+   "rank": 2,
+   "x": 260,
+   "y": 163,
+   "lengthPx": 88,
+   "group": "high",
+   "modalRatios": [
+    0.994,
+    6.2638,
+    17.6454
+   ],
+   "dampingTaus": [
+    1.026,
+    0.171,
+    0.0385
+   ],
+   "amplitudes": [
+    1.0016,
+    0.5008,
+    0.2804
+   ],
+   "excitationSensitivity": 0.93
+  },
+  {
+   "note": 79,
+   "name": "G5",
+   "frequencyHz": 783.99,
+   "rank": 2,
+   "x": 320,
+   "y": 163,
+   "lengthPx": 84,
+   "group": "high",
+   "modalRatios": [
+    1.0047,
+    6.2556,
+    17.4455
+   ],
+   "dampingTaus": [
+    1.0142,
+    0.169,
+    0.038
+   ],
+   "amplitudes": [
+    0.9956,
+    0.4978,
+    0.2788
+   ],
+   "excitationSensitivity": 1.14
+  },
+  {
+   "note": 81,
+   "name": "A5",
+   "frequencyHz": 880.0,
+   "rank": 2,
+   "x": 380,
+   "y": 165,
+   "lengthPx": 80,
+   "group": "high",
+   "modalRatios": [
+    0.9979,
+    6.3006,
+    17.6319
+   ],
+   "dampingTaus": [
+    1.0238,
+    0.1706,
+    0.0384
+   ],
+   "amplitudes": [
+    1.0059,
+    0.5029,
+    0.2817
+   ],
+   "excitationSensitivity": 1.05
+  },
+  {
+   "note": 83,
+   "name": "B5",
+   "frequencyHz": 987.77,
+   "rank": 2,
+   "x": 440,
+   "y": 169,
+   "lengthPx": 76,
+   "group": "high",
+   "modalRatios": [
+    0.9988,
+    6.2325,
+    17.5156
+   ],
+   "dampingTaus": [
+    1.0193,
+    0.1699,
+    0.0382
+   ],
+   "amplitudes": [
+    0.9944,
+    0.4972,
+    0.2784
+   ],
+   "excitationSensitivity": 0.96
+  },
+  {
+   "note": 84,
+   "name": "C6",
+   "frequencyHz": 1046.5,
+   "rank": 2,
+   "x": 500,
+   "y": 175,
+   "lengthPx": 72,
+   "group": "high",
+   "modalRatios": [
+    1.0042,
+    6.3031,
+    17.5264
+   ],
+   "dampingTaus": [
+    1.0174,
+    0.1696,
+    0.0382
+   ],
+   "amplitudes": [
+    1.0036,
+    0.5018,
+    0.281
+   ],
+   "excitationSensitivity": 1.17
+  }
+ ],
+ "soundboard": {
+  "bands": [
+   {
+    "fc": 120,
+    "q": 4.0,
+    "gain": 1.0
+   },
+   {
+    "fc": 260,
+    "q": 5.0,
+    "gain": 0.75
+   },
+   {
+    "fc": 520,
+    "q": 6.0,
+    "gain": 0.5
+   },
+   {
+    "fc": 950,
+    "q": 7.0,
+    "gain": 0.3
+   },
+   {
+    "fc": 1700,
+    "q": 8.0,
+    "gain": 0.18
+   }
+  ]
+ },
+ "gourd": {
+  "freqHz": 200,
+  "amount": 0.22
+ },
+ "buzz": {
+  "characterHz": 2800,
+  "intensity": 0.0
+ }
+}

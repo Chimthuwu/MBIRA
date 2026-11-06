@@ -71,3 +71,11 @@ Judgement of whether it sounds like an mbira is yours (agent cannot listen).
 
 All controls go through the same bounded event queue as MIDI (service thread
 runs the JS renderer; audio thread untouched). All parameters PROVISIONAL.
+
+## Instruments (M2)
+
+The standalone/plugin loads `src/instruments/mbira-dzavadzimu.json` at startup
+(override with `MBIRA_INSTRUMENT=src/instruments/nyunga-nyunga.json`). The
+keyboard layout in the UI comes from the loaded instrument's schematic
+coordinates. Edit the JSON to change tunings/layouts - no code changes needed
+(all marked PROVISIONAL). Validate with `npm test`.

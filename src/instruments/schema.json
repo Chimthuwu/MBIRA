@@ -1,0 +1,154 @@
+{
+ "$schema": "http://json-schema.org/draft-07/schema#",
+ "title": "MBIRA instrument definition",
+ "type": "object",
+ "required": [
+  "name",
+  "id",
+  "keyCount",
+  "provisional",
+  "canvas",
+  "keys",
+  "soundboard",
+  "gourd",
+  "buzz"
+ ],
+ "properties": {
+  "name": {
+   "type": "string"
+  },
+  "id": {
+   "type": "string"
+  },
+  "type": {
+   "type": "string"
+  },
+  "keyCount": {
+   "type": "integer",
+   "minimum": 1
+  },
+  "provisional": {
+   "const": true
+  },
+  "canvas": {
+   "type": "object",
+   "required": [
+    "width",
+    "height"
+   ],
+   "properties": {
+    "width": {
+     "type": "number"
+    },
+    "height": {
+     "type": "number"
+    }
+   }
+  },
+  "keys": {
+   "type": "array",
+   "minItems": 1,
+   "items": {
+    "type": "object",
+    "required": [
+     "note",
+     "name",
+     "frequencyHz",
+     "rank",
+     "x",
+     "y",
+     "lengthPx",
+     "group",
+     "modalRatios",
+     "dampingTaus",
+     "amplitudes",
+     "excitationSensitivity"
+    ],
+    "properties": {
+     "note": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 127
+     },
+     "name": {
+      "type": "string"
+     },
+     "frequencyHz": {
+      "type": "number",
+      "exclusiveMinimum": 0
+     },
+     "rank": {
+      "type": "integer",
+      "minimum": 1
+     },
+     "x": {
+      "type": "number"
+     },
+     "y": {
+      "type": "number"
+     },
+     "lengthPx": {
+      "type": "number",
+      "exclusiveMinimum": 0
+     },
+     "group": {
+      "enum": [
+       "low",
+       "mid",
+       "high"
+      ]
+     },
+     "modalRatios": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+       "type": "number",
+       "exclusiveMinimum": 0
+      }
+     },
+     "dampingTaus": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+       "type": "number",
+       "exclusiveMinimum": 0
+      }
+     },
+     "amplitudes": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+       "type": "number",
+       "minimum": 0
+      }
+     },
+     "excitationSensitivity": {
+      "type": "number",
+      "minimum": 0
+     }
+    }
+   }
+  },
+  "soundboard": {
+   "type": "object",
+   "required": [
+    "bands"
+   ],
+   "properties": {
+    "bands": {
+     "type": "array",
+     "minItems": 1
+    }
+   }
+  },
+  "gourd": {
+   "type": "object"
+  },
+  "buzz": {
+   "type": "object"
+  }
+ }
+}

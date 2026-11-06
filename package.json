@@ -2,11 +2,12 @@
   "name": "mbira",
   "version": "0.1.0",
   "private": true,
-  "description": "MBIRA — playable physically modelled virtual mbira on Elementary Audio (Milestone 1 PoC)",
+  "description": "MBIRA \u2014 playable physically modelled virtual mbira on Elementary Audio (Milestone 1 PoC)",
   "type": "module",
   "scripts": {
     "build:dsp": "esbuild src/dsp/index.js --bundle --format=iife --outfile=build/dsp-bundle.js",
-    "test": "node tests/dsp/run.mjs"
+    "test": "node tests/instruments/validate.mjs && node tests/dsp/sanity.mjs",
+    "test:instruments": "node tests/instruments/validate.mjs"
   },
   "dependencies": {
     "@elemaudio/core": "4.0.1"

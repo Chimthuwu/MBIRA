@@ -128,6 +128,65 @@ struct Engine {
 };
 
 // ---------------------------------------------------------------------------
+// Instrument definitions (spec section 4)
+
+static std::vector<mbira_ui::KeyGeom> g_geom;
+static float g_canvasW = 800.0f, g_canvasH = 300.0f;
+static std::string g_instrumentName;
+
+static std::string jsStringLiteral(const std::string& s) {
+  std::string o = "\"";
+  for (char ch : s) {
+    switch (ch) {
+      case '\\': o += "\\\\"; break;
+      case '"':  o += "\\\""; break;
+      case '\n': o += "\\n"; break;
+      case '\r': o += "\\r"; break;
+      case '\t': o += "\\t"; break;
+      default: o += ch;
+    }
+  }
+  o += "\"";
+  return o;
+}
+
+// Reads the instrument JSON, loads it into the DSP (voice pool rebuilds from
+// the key list; body config applied) and records the schematic geometry for
+// the UI. Returns false if no file is found (default 64-note pool stays).
+static bool loadInstrumentFromDisk(Engine& eng) {
+  const char* envp = getenv("MBIRA_INSTRUMENT");
+  std::string path = envp ? envp : "src/instruments/mbira-dzavadzimu.json";
+  auto text = choc::file::loadFileAsString(path);
+  if (text.empty()) {
+    fprintf(stderr, "NOTE: instrument JSON not found (%s) - using default 64-note pool\n", path.c_str());
+    return false;
+  }
+  if (!eng.call("__mbira.loadInstrument(" + jsStringLiteral(text) + ")")) {
+    fprintf(stderr, "ERROR: %s\n", eng.lastError.c_str());
+    return false;
+  }
+  choc::value::Value root;
+  try { root = choc::json::parse(text); }
+  catch (const choc::json::ParseError& e) { fprintf(stderr, "ERROR: bad instrument JSON: %s\n", e.what()); return false; }
+  g_geom.clear();
+  auto keys = root["keys"];
+  for (size_t i = 0; i < keys.size(); ++i) {
+    auto k = keys[(int) i];
+    mbira_ui::KeyGeom kg;
+    kg.note = (int) k["note"].get<int64_t>();
+    kg.x = (float) k["x"].get<double>();
+    kg.y = (float) k["y"].get<double>();
+    kg.len = (float) k["lengthPx"].get<double>();
+    g_geom.push_back(kg);
+  }
+  g_canvasW = (float) root["canvas"]["width"].get<double>();
+  g_canvasH = (float) root["canvas"]["height"].get<double>();
+  g_instrumentName = root["name"].toString();
+  fprintf(stderr, "Instrument: %s (%d keys) from %s\n", g_instrumentName.c_str(), (int) g_geom.size(), path.c_str());
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // Events
 
 struct Event {
@@ -319,6 +378,9 @@ static int runLive(Engine& eng, bool withUi, double autoQuitS) {
 
   RtMidiIn midi;
   mbira_ui::State uiState;
+  uiState.geom = g_geom;           // instrument-driven keyboard layout (may be empty)
+  uiState.canvasW = g_canvasW;
+  uiState.canvasH = g_canvasH;
   struct MidiBridge { std::mutex* m; std::deque<Event>* q; mbira_ui::State* ui; };
   MidiBridge bridge { &qMutex, &q, &uiState };
   midi.setCallback([](double, std::vector<unsigned char>* msg, void* userData) {
@@ -412,6 +474,7 @@ int main(int argc, char** argv) {
     fprintf(stderr, "ERROR: %s (run: npm run build:dsp from the repo root)\n", eng.lastError.c_str());
     return 1;
   }
+  loadInstrumentFromDisk(eng); // MBIRA_INSTRUMENT env overrides; default: dzavadzimu
 
   if (mode == "render") {
     if (wavPath.empty() || eventsPath.empty()) { fprintf(stderr, "render requires <out.wav> <events.json>\n"); return 2; }

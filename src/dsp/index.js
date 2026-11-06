@@ -67,6 +67,7 @@ const cfg = {
   soundboard: 0.35,      // wet amount of the shared resonator bank
   gourdAmount: 0.30,
   gourdFreq: 170.0,      // Hz, PROVISIONAL
+  instrumentName: 'Default 64-voice range',
   buzzIntensity: 0.0,    // 0..1 (off by default until the player weighs in)
   buzzChar: 3200.0,      // Hz, PROVISIONAL
 };
@@ -165,7 +166,7 @@ function buildVoiceGraph(st) {
 
 // Soundboard: 5 broad bandpass resonators on the summed bus. PROVISIONAL
 // centre frequencies/widths; single shared instance for ALL voices.
-const SB_BANDS = [
+let SB_BANDS = [
   { fc: 95.0,  q: 4.0, gain: 1.00 },
   { fc: 210.0, q: 5.0, gain: 0.80 },
   { fc: 430.0, q: 6.0, gain: 0.55 },
@@ -272,6 +273,52 @@ function releaseSustained() {
   renderAll();
 }
 
+// ---- instrument definitions (spec section 4, JSON-driven) -------------------
+
+let instrumentName = 'default';
+
+// The host reads the instrument JSON (the JS context has no filesystem) and
+// calls this with its text. Rebuilds the voice pool from the instrument's key
+// list, applies per-tine modal overrides, and reconfigures the shared body
+// (soundboard bands, gourd, buzz). Everything happens off the audio thread.
+function loadInstrument(jsonText) {
+  const inst = JSON.parse(jsonText);
+  if (!inst || !Array.isArray(inst.keys) || inst.keys.length === 0)
+    throw new Error('instrument JSON has no keys');
+  instrumentName = inst.id || inst.name || 'unknown';
+  if (inst.name) cfg.instrumentName = inst.name;
+
+  voiceState.clear();
+  voiceOrder.length = 0;
+  sustainedNotes.clear();
+  tineOverrides.clear();
+
+  for (const k of inst.keys) {
+    if (typeof k.note !== 'number' || typeof k.frequencyHz !== 'number')
+      throw new Error(`key missing note/frequencyHz: ${JSON.stringify(k).slice(0, 80)}`);
+    const st = ensureState(k.note);
+    st.freq = k.frequencyHz;
+    const ov = {};
+    if (Array.isArray(k.modalRatios)) ov.ratios = k.modalRatios;
+    if (Array.isArray(k.dampingTaus)) ov.taus = k.dampingTaus;
+    if (Object.keys(ov).length) tineOverrides.set(k.note, ov);
+  }
+
+  if (inst.soundboard && Array.isArray(inst.soundboard.bands) && inst.soundboard.bands.length) {
+    SB_BANDS = inst.soundboard.bands.map((b) => ({ fc: b.fc, q: b.q, gain: b.gain }));
+  }
+  if (inst.gourd) {
+    if (typeof inst.gourd.freqHz === 'number') cfg.gourdFreq = inst.gourd.freqHz;
+    if (typeof inst.gourd.amount === 'number') cfg.gourdAmount = inst.gourd.amount;
+  }
+  if (inst.buzz) {
+    if (typeof inst.buzz.characterHz === 'number') cfg.buzzChar = inst.buzz.characterHz;
+    if (typeof inst.buzz.intensity === 'number') cfg.buzzIntensity = inst.buzz.intensity;
+  }
+  if (inst.provisional === false) cfg.provisional = false; // stays true in all shipped defs
+  renderAll();
+}
+
 // ---- public API the host calls ---------------------------------------------
 
 function noteOn(note, velocity) {
@@ -342,6 +389,15 @@ function allNotesDamp() {
   renderAll();
 }
 
+function getInstrument() {
+  const keys = [...voiceState.keys()].map((n) => {
+    const st = voiceState.get(n);
+    const r = ratiosFor(st);
+    return { note: n, frequencyHz: st.freq, ratios: r.ratios, taus: r.taus };
+  });
+  return { name: cfg.instrumentName || instrumentName, keys };
+}
+
 function configureSampleRate(sr) {
   cfg.sampleRate = sr;
   renderAll(); // rebuilds; Nyquist suppression re-evaluated per mode
@@ -362,4 +418,5 @@ renderAll();
 globalThis.__mbira = {
   noteOn, noteOff, sustain, setParam, setModeGain, setRatioSet,
   setTineOverride, allNotesDamp, configureSampleRate, configurePool,
+  loadInstrument, getInstrument,
 };
