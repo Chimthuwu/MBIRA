@@ -1,21 +1,33 @@
 :root{
-  /* surfaces */
-  --bg-0:#0b0a09; --bg-1:#12100e; --bg-2:#1a1613; --panel:#1f1a16;
-  --panel-hi:#262019; --line:#332a23; --line-hi:#4a3d31;
+  /* surfaces — deep neutral-cool shell: wood stays the only warm mass */
+  --bg-0:#08090b; --bg-1:#0e1013; --bg-2:#14161a; --panel:#181b20;
+  --panel-hi:#1f232a; --line:#2a2f37; --line-hi:#3a414c;
 
-  /* wood */
-  --wood-0:#2a1d15; --wood-1:#402c1f; --wood-2:#5a3d29; --wood-3:#7a5236;
+  /* wood — richer redder hardwood (muhacha-leaning); warmer + more
+     saturated than v1 so it separates from the shell without glow */
+  --wood-0:#241610; --wood-1:#3d2418; --wood-2:#5c3a24; --wood-3:#82563a;
 
-  /* tine metal */
-  --tine-0:#5c626a; --tine-1:#8b929a; --tine-2:#c2c9d1; --tine-3:#eef2f6;
+  /* tine metal — cooler and brighter than v1; steel reads as steel,
+     not grey paint, against the warm board */
+  --tine-0:#4e565f; --tine-1:#7d8791; --tine-2:#b9c3cd; --tine-3:#eef3f8;
 
-  /* accent */
-  --accent:#f0a63c; --accent-hot:#ffd58a; --accent-dim:#8a5c1e;
+  /* accent — ENERGY EVENTS ONLY (note-on, active insert, meter signal).
+     Never selection, never focus, never navigation state. */
+  --accent:#f0a63c; --accent-hot:#ffd98f; --accent-dim:#7d531c;
   --brass:#c9a227;
+
+  /* neutral selection / focus — NEW. Intended use: replaces the amber
+     outline today used on .select/.tine/.range/.knob__dial focus-visible,
+     and becomes the ordinary "current" color for navigation, selection and
+     disabled-contrast in the post-approval re-skin. Neutral cool steel:
+     legible against every surface, visually distinct from energy. */
+  --sel:#aeb9c4; --sel-dim:#5c6773;
+
+  /* status */
   --ok:#67b86e; --warn:#e0a33a; --err:#d9534f;
 
-  /* text */
-  --text:#e9e1d6; --text-2:#a99c8d; --text-3:#6f6459;
+  /* text — ivory, slightly warm; sits comfortably on the cool shell */
+  --text:#e8e4dc; --text-2:#a8a49b; --text-3:#6e6a63;
 
   /* type scale */
   --font-ui:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
@@ -26,7 +38,7 @@
   --r-s:4px; --r-m:7px; --r-l:11px;
   --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px;
 
-  /* motion — tine-down MUST read as instantaneous */
+  /* motion — tine-down MUST read as instantaneous (unchanged from v1) */
   --t-down:18ms; --t-up:220ms; --t-glow:600ms;
   --ease-out:cubic-bezier(.22,.61,.36,1);
   --ease-in-out:cubic-bezier(.4,0,.2,1);

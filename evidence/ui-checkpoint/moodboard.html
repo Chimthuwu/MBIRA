@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MBIRA moodboard — checkpoint 1</title>
+<!--
+  STANDALONE ARTIFACT — not a product surface. Lives in
+  evidence/ui-checkpoint/ and is NOT shipped in ui/. Unlike the product
+  (strict CSP, no inline styles), this page inlines its <style> block so it
+  is a single self-contained file viewable from file:// with no server and
+  no external assets. All values shown are the PROPOSED token values from
+  ui/css/tokens.css on branch ui/visual-first-assignment.
+-->
+<style>
+:root{
+  /* proposed tokens.css values, mirrored for standalone viewing */
+  --bg-0:#08090b; --bg-1:#0e1013; --bg-2:#14161a; --panel:#181b20;
+  --panel-hi:#1f232a; --line:#2a2f37; --line-hi:#3a414c;
+  --wood-0:#241610; --wood-1:#3d2418; --wood-2:#5c3a24; --wood-3:#82563a;
+  --tine-0:#4e565f; --tine-1:#7d8791; --tine-2:#b9c3cd; --tine-3:#eef3f8;
+  --accent:#f0a63c; --accent-hot:#ffd98f; --accent-dim:#7d531c; --brass:#c9a227;
+  --sel:#aeb9c4; --sel-dim:#5c6773;
+  --ok:#67b86e; --warn:#e0a33a; --err:#d9534f;
+  --text:#e8e4dc; --text-2:#a8a49b; --text-3:#6e6a63;
+  --font-ui:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+  --font-num:"Cascadia Mono",Consolas,ui-monospace,monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg-0); color:var(--text);
+  font:13px/1.45 var(--font-ui);
+  padding:28px 32px 48px;
+}
+h1{font-size:19px;letter-spacing:.14em;font-weight:600;margin:0 0 2px}
+h1 small{font-size:11px;color:var(--text-3);letter-spacing:.08em;font-weight:400;margin-left:10px}
+.sub{color:var(--text-3);font-size:12px;margin:0 0 26px}
+h2{
+  font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--text-3);margin:30px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line);
+}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.card{
+  background:linear-gradient(var(--panel),var(--bg-2));
+  border:1px solid var(--line);border-radius:11px;padding:14px;
+}
+
+/* material chips */
+.wood{
+  width:210px;height:86px;border-radius:8px;position:relative;overflow:hidden;
+  background:radial-gradient(130% 100% at 50% 0%, var(--wood-2) 0%, var(--wood-1) 45%, var(--wood-0) 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05), inset 0 -18px 30px -16px #000;
+}
+.wood::before{
+  content:"";position:absolute;inset:0;opacity:.35;mix-blend-mode:overlay;
+  background-image:repeating-linear-gradient(90deg,
+    rgba(0,0,0,.18) 0 1px, transparent 1px 7px,
+    rgba(255,255,255,.03) 7px 8px, transparent 8px 19px);
+}
+.steel{
+  width:210px;height:86px;border-radius:8px;position:relative;overflow:hidden;
+  background:
+    repeating-linear-gradient(90deg, rgba(255,255,255,.045) 0 2px, transparent 2px 9px),
+    linear-gradient(180deg, var(--tine-2) 0%, var(--tine-1) 26%, var(--tine-0) 80%, #23272c 100%);
+  box-shadow:inset 1px 0 0 rgba(255,255,255,.35), inset -1px 0 0 rgba(0,0,0,.45);
+}
+.chiplabel{font-size:11px;color:var(--text-3);margin-top:7px;font-family:var(--font-num)}
+
+/* swatches */
+.sw{width:104px}
+.sw i{display:block;height:44px;border-radius:6px;border:1px solid var(--line-hi)}
+.sw b{display:block;font-size:11px;font-weight:400;color:var(--text-2);margin-top:5px}
+.sw code{font:10px var(--font-num);color:var(--text-3)}
+
+/* type specimen */
+.type div{margin:4px 0}
+.t19{font-size:19px;letter-spacing:.14em;font-weight:600}
+.t15{font-size:15px}
+.t13{font-size:13px}
+.t12{font-size:12px;color:var(--text-2)}
+.t11{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3)}
+.num{font:12px var(--font-num);color:var(--text-2);font-variant-numeric:tabular-nums}
+
+/* energy discipline: three mini-tines */
+.tinedemo{display:flex;gap:18px;align-items:flex-end}
+.mini{
+  width:30px;height:96px;border-radius:3px 3px 5px 5px;position:relative;
+  background:linear-gradient(180deg,var(--tine-2) 0%,var(--tine-1) 22%,var(--tine-0) 78%,#23272c 100%);
+  box-shadow:inset 1px 0 0 rgba(255,255,255,.35), inset -1px 0 0 rgba(0,0,0,.45), 0 2px 4px -1px rgba(0,0,0,.7);
+}
+.mini::after{content:"";position:absolute;left:50%;bottom:9%;width:2px;height:14%;translate:-50% 0;border-radius:2px;background:rgba(0,0,0,.45);opacity:.5}
+.mini.on{
+  transform:translateY(-2px) scaleY(.995);
+  filter:brightness(1.35) saturate(1.05);
+  box-shadow:inset 1px 0 0 rgba(255,255,255,.55), inset -1px 0 0 rgba(0,0,0,.45),
+    0 0 0 1px rgba(255,217,143,.55), 0 0 18px -2px var(--accent), 0 0 46px -8px var(--accent);
+}
+.mini.damped{filter:brightness(.72) saturate(.4)}
+.dl{font-size:11px;color:var(--text-3);text-align:center;margin-top:7px;width:64px}
+
+/* focus/selection strip: neutral, NOT amber */
+.focustrip{display:flex;gap:14px;align-items:center}
+.fbtn{
+  font:12px var(--font-ui);color:var(--text);
+  background:var(--panel-hi);border:1px solid var(--line-hi);
+  border-radius:7px;padding:6px 12px;
+}
+.fbtn.focused{outline:2px solid var(--sel);outline-offset:2px}
+.fbtn.current{border-color:var(--sel-dim);color:var(--sel);box-shadow:inset 0 0 0 1px var(--sel-dim)}
+.note{font-size:11px;color:var(--text-3);max-width:520px;line-height:1.5}
+.note b{color:var(--text-2);font-weight:600}
+footer{margin-top:34px;font-size:11px;color:var(--text-3)}
+</style>
+</head>
+<body>
+<h1>MBIRA <small>dzaVadzimu · visual identity checkpoint 1</small></h1>
+<p class="sub">Proposed token swap · branch <code>ui/visual-first-assignment</code> · base <code>a7051f8</code> · awaiting signoff</p>
+
+<h2>Material — two substances, one shell</h2>
+<div class="row">
+  <div><div class="wood"></div><div class="chiplabel">wood — warm, reddened hardwood board</div></div>
+  <div><div class="steel"></div><div class="chiplabel">steel — cool, bright tine metal</div></div>
+  <div style="flex:1;min-width:220px" class="card"><p class="note">
+    The shell goes <b>deeper and cooler</b> (near-black, blue-cast) so the wood
+    reads as the only warm mass in the window and steel reads as metal, not grey
+    paint. Material contrast does the work — <b>no uniform dark treatment, no
+    universal drop shadows, no glossy gradients on every control</b>.
+  </p></div>
+</div>
+
+<h2>Palette</h2>
+<div class="row">
+  <div class="sw"><i style="background:linear-gradient(#08090b,#14161a)"></i><b>shell</b><code>--bg-0…--bg-2</code></div>
+  <div class="sw"><i style="background:linear-gradient(#241610,#82563a)"></i><b>wood</b><code>--wood-0…-3</code></div>
+  <div class="sw"><i style="background:linear-gradient(#4e565f,#eef3f8)"></i><b>steel</b><code>--tine-0…-3</code></div>
+  <div class="sw"><i style="background:linear-gradient(#7d531c,#ffd98f)"></i><b>energy</b><code>--accent(-dim/hot)</code></div>
+  <div class="sw"><i style="background:linear-gradient(#5c6773,#aeb9c4)"></i><b>selection (new)</b><code>--sel-dim/--sel</code></div>
+  <div class="sw"><i style="background:linear-gradient(#6e6a63,#e8e4dc)"></i><b>text</b><code>--text-3…--text</code></div>
+</div>
+
+<h2>Type</h2>
+<div class="card type">
+  <div class="t19">MBIRA <span style="font-size:11px;color:var(--text-3);letter-spacing:.08em">dzaVadzimu</span></div>
+  <div class="t15">Section heading — 15</div>
+  <div class="t13">Body / control cluster label — 13</div>
+  <div class="t12">Control label — 12</div>
+  <div class="t11">Panel label · status — 11</div>
+  <div class="num">Numeric readouts: 0.80 &nbsp; 37 / 37 &nbsp; −10.7 dBFS &nbsp; <span style="color:var(--text-3)">tabular-nums, Cascadia Mono</span></div>
+</div>
+
+<h2>Energy discipline — amber appears ONLY here</h2>
+<div class="row" style="align-items:flex-start">
+  <div class="tinedemo">
+    <div><div class="mini"></div><div class="dl">idle<br>no amber</div></div>
+    <div><div class="mini on"></div><div class="dl">held<br>amber ring + glow</div></div>
+    <div><div class="mini damped"></div><div class="dl">damped<br>residual, decaying</div></div>
+  </div>
+  <div class="card" style="flex:1;min-width:240px"><p class="note">
+    <b>Amber = energy:</b> tine held, board glow, active FX insert, meter signal.
+    <b>Everything else is neutral:</b> hover, focus, current page, selection,
+    labels, dividers, disabled, the Samples empty state. Focus and navigation
+    use the new <code>--sel</code> steel highlight — never amber.
+  </p></div>
+</div>
+
+<h2>Focus &amp; selection — neutral contrast</h2>
+<div class="card focustrip">
+  <button class="fbtn" type="button">normal</button>
+  <button class="fbtn focused" type="button">focus (2px --sel)</button>
+  <button class="fbtn current" type="button">current page / selected</button>
+  <button class="fbtn" type="button" style="opacity:.35;cursor:not-allowed" disabled>disabled</button>
+</div>
+
+<footer>
+  Timings unchanged: press 18 ms · release 220 ms · damped 280 ms · glow fade 600 ms
+  (reduced-motion: 0/0/280→0/120). Moodboard is a standalone artifact in
+  evidence/ui-checkpoint/ — product CSP and stylesheet discipline unaffected.
+</footer>
+</body>
+</html>

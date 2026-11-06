@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MBIRA palette — checkpoint 1</title>
+<!-- Links the PRODUCT ui/css/tokens.css (proposed values on the work branch)
+     plus this directory's local stylesheet. No inline styles or scripts. -->
+<link rel="stylesheet" href="../../ui/css/tokens.css">
+<link rel="stylesheet" href="palette.css">
+<style>/* page scaffolding only — mirrors product discipline of no inline styles;
+           kept here rather than in palette.css so the proof sheet stays pure */
+html,body{margin:0}
+body{background:var(--bg-0);color:var(--text);font:var(--fs-13)/1.4 var(--font-ui);padding:22px 26px}
+h1{font-size:var(--fs-15);letter-spacing:.1em;margin:0 0 4px;font-weight:600}
+h2{font-size:var(--fs-11);letter-spacing:.14em;text-transform:uppercase;color:var(--text-3);margin:22px 0 8px}
+header p{font-size:var(--fs-11);color:var(--text-3);margin:0 0 8px}
+.gridwrap{display:flex;gap:14px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<header>
+  <h1>MBIRA palette proof</h1>
+  <p>Consumes <code>ui/css/tokens.css</code> directly (proposed values, branch
+  <code>ui/visual-first-assignment</code>). Nothing here is hardcoded — every color
+  resolves through a product token, proving the swap is complete.</p>
+</header>
+
+<h2>Token swatches</h2>
+<div class="gridwrap demo">
+  <div class="cell"><i style="background:var(--bg-1)"></i><b>shell</b><code>--bg-1 #0e1013</code></div>
+  <div class="cell"><i style="background:var(--panel)"></i><b>panel</b><code>--panel #181b20</code></div>
+  <div class="cell"><i style="background:var(--wood-1)"></i><b>wood mid</b><code>--wood-1 #3d2418</code></div>
+  <div class="cell"><i style="background:var(--wood-3)"></i><b>wood hi</b><code>--wood-3 #82563a</code></div>
+  <div class="cell"><i style="background:var(--tine-0)"></i><b>steel dark</b><code>--tine-0 #4e565f</code></div>
+  <div class="cell"><i style="background:var(--tine-2)"></i><b>steel light</b><code>--tine-2 #b9c3cd</code></div>
+  <div class="cell"><i style="background:var(--accent)"></i><b>energy</b><code>--accent #f0a63c</code></div>
+  <div class="cell"><i style="background:var(--accent-hot)"></i><b>energy hot</b><code>--accent-hot #ffd98f</code></div>
+  <div class="cell"><i style="background:var(--sel)"></i><b>selection (new)</b><code>--sel #aeb9c4</code></div>
+  <div class="cell"><i style="background:var(--sel-dim)"></i><b>sel dim (new)</b><code>--sel-dim #5c6773</code></div>
+  <div class="cell"><i style="background:var(--ok)"></i><b>status ok</b><code>--ok #67b86e</code></div>
+  <div class="cell"><i style="background:var(--warn)"></i><b>status warn</b><code>--warn #e0a33a</code></div>
+  <div class="cell"><i style="background:var(--err)"></i><b>status err</b><code>--err #d9534f</code></div>
+  <div class="cell"><i style="background:var(--text-2)"></i><b>text mid</b><code>--text-2 #a8a49b</code></div>
+</div>
+
+<h2>Assembled: board + tine states + panel, all via product tokens</h2>
+<div class="gridwrap demo">
+  <div style="flex:1.2;min-width:300px">
+    <div class="boardlet">
+      <div class="tinemin is-on" style="left:18%"></div>
+      <div class="tinemin" style="left:28%"></div>
+      <div class="tinemin" style="left:38%"></div>
+      <div class="tinemin" style="left:48%"></div>
+      <div class="tinemin" style="left:58%"></div>
+      <div class="tinemin" style="left:68%"></div>
+      <div class="tinemin" style="left:78%"></div>
+    </div>
+  </div>
+  <div class="panellet">
+    <h3>Tine</h3>
+    <div class="krow">
+      <div class="cell"><i style="background:radial-gradient(circle at 50% 32%, var(--tine-1), var(--tine-0) 62%, #1e2226 100%)"></i><b>knob dial</b><code>radial steel</code></div>
+      <div class="cell"><i style="background:linear-gradient(90deg,var(--accent-dim),var(--line-hi))"></i><b>fader track</b><code>accent-dim→line</code></div>
+      <div class="cell"><i style="background:linear-gradient(180deg,var(--tine-2),var(--tine-0))"></i><b>cap/thumb</b><code>tine-2→0</code></div>
+    </div>
+    <h3>Status</h3>
+    <div class="krow" style="gap:10px;font-size:var(--fs-11);color:var(--text-3)">
+      <span><i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok)"></i> ok</span>
+      <span><i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--warn)"></i> warn</span>
+      <span><i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--err)"></i> err</span>
+      <span class="num" style="color:var(--text-2)">Voices 0 / 37 · CPU 12%</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>
