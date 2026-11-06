@@ -27,13 +27,16 @@ export function mountKnobs(root){
       dial.style.setProperty('--rot', `${-135 + n * 270}deg`);
       dial.setAttribute('aria-valuenow', Math.round(n * 100));
       dial.setAttribute('aria-valuetext', val.toFixed(2));
+      refreshRead();
     };
 
+    const dyn = k.querySelector('.knob__val--dyn');
     const commit = () => send('param.set', { path: k.dataset.param, value: val });
+    const refreshRead = () => { const nn = (val - min) / (max - min); if (dyn) dyn.textContent = `${Math.round(nn * 100)}%`; };
 
     dial.addEventListener('pointerdown', (e) => {
       e.preventDefault();
-      dial.setPointerCapture(e.pointerId);
+      try { dial.setPointerCapture(e.pointerId); } catch (_) {}
       const y0 = e.clientY, v0 = val;
       const move = (ev) => {
         const dy = y0 - ev.clientY;           // up = increase
@@ -65,6 +68,53 @@ export function mountKnobs(root){
     dial.addEventListener('dblclick', () => { val = (min + max) / 2; paint(); commit(); });
     paint();
   });
+}
+
+/* ── engine blend slider (Physical <-> Samples; param.set) ── */
+export function mountBlend(root){
+  const b = root.querySelector('[data-blend]');
+  if (!b) return;
+  const track = b.querySelector('.blend__track');
+  const min = +track.getAttribute('aria-valuemin');
+  const max = +track.getAttribute('aria-valuemax');
+  let now = +track.getAttribute('aria-valuenow');
+
+  const paint = () => {
+    const s = `${now}%`;
+    b.style.setProperty('--bpos', s);
+    track.querySelector('.blend__read').textContent = String(Math.round(now));
+    track.setAttribute('aria-valuenow', String(Math.round(now)));
+    track.setAttribute('aria-valuetext',
+      now >= 100 ? '100% physical model' : (now <= 0 ? '100% body samples' : `${Math.round(now)}% physical, ${100 - Math.round(now)}% samples`));
+  };
+  const commit = () => send('param.set', { path: 'blend.engine', value: now / 100 });
+
+  const set = (v) => { now = Math.min(max, Math.max(min, v)); paint(); };
+
+  track.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    try { track.setPointerCapture(e.pointerId); } catch (_) {}
+    const r = track.getBoundingClientRect();
+    set(((e.clientX - r.left) / r.width) * max);
+    const move = (ev) => set(((ev.clientX - r.left) / r.width) * max);
+    const up = () => {
+      track.removeEventListener('pointermove', move);
+      track.removeEventListener('pointerup', up);
+      commit();
+    };
+    track.addEventListener('pointermove', move);
+    track.addEventListener('pointerup', up);
+  });
+  track.addEventListener('keydown', (e) => {
+    const step = 1;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { set(now + step); commit(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { set(now - step); commit(); }
+    else if (e.key === 'Home') { set(min); commit(); }
+    else if (e.key === 'End') { set(max); commit(); }
+    else return;
+    e.preventDefault();
+  });
+  paint();
 }
 
 /* ── meter + scope (telemetry-driven; mock when offline) ─── */

@@ -12,157 +12,229 @@
 <body>
 <div class="app" id="app">
 
-  <!-- ── top bar (persistent) ───────────────────────────────── -->
+  <!-- ── top bar · nav + preset + panic (persistent) ──────── -->
   <header class="topbar">
     <div class="brand">
       <span class="brand__mark" aria-hidden="true"></span>
       <span class="brand__name">MBIRA</span>
-      <span class="brand__sub">dzaVadzimu</span>
+      <span class="brand__sub">Physical Model &amp; Body</span>
     </div>
-    <div class="topbar__mid">
+    <nav class="nav" id="nav" aria-label="Pages"></nav>
+    <div class="topbar__right">
       <label class="field">
         <span class="field__label">Preset</span>
         <select class="select" id="preset">
-          <option>Init — Nyamaropa (placeholder)</option>
-          <option>Init — Gandanga (placeholder)</option>
+          <option>Standard dzaVadzimu (default)</option>
+          <option>Deep Gourd Nyunga Nyunga</option>
+          <option>Resonant Buzz Master</option>
+          <option>Dry Cantilever Tines</option>
         </select>
       </label>
-    </div>
-    <div class="topbar__right">
-      <button class="btn btn--warn" id="panic" title="All-damp (Esc)">Panic</button>
-      <button class="btn btn--icon" id="settings" title="Settings" aria-label="Settings">⚙</button>
+      <button class="btn btn--warn" id="panic" title="All-damp (Esc)">Panic / Damp</button>
     </div>
   </header>
 
-  <!-- ── page navigation (persistent) ───────────────────────── -->
-  <nav class="nav" id="nav" aria-label="Pages"></nav>
+  <!-- ── hero · persistent playable keyboard ──────────────── -->
+  <section class="hero">
+    <div class="board" id="board">
+      <div class="board__bridge" aria-hidden="true"></div>
+      <div class="board__glow" aria-hidden="true"></div>
+      <div class="tines" id="tines" role="group" aria-label="Tines"></div>
+    </div>
+    <span class="provisional" title="Real dzaVadzimu tunings pending (amendment 4.9)">MODAL V1.0 PROVISIONAL</span>
+  </section>
 
-  <!-- ── page region (shrinkable) ───────────────────────────── -->
+  <!-- ── page region ──────────────────────────────────────── -->
   <main class="views" id="views">
 
-    <!-- PLAY · keyboard hero + master + output meter -->
+    <!-- PLAY · engine blend + macros + master/meter -->
     <section class="view view--play" data-page="play">
-      <div class="keyboard-wrap">
-        <div class="board" id="board">
-          <div class="board__bridge" aria-hidden="true"></div>
-          <div class="board__glow" aria-hidden="true"></div>
-          <div class="tines" id="tines" role="group" aria-label="Tines"></div>
+      <div class="panel panel--blend">
+        <h2 class="panel__h">Augmented Synthesis Engine</h2>
+        <div class="blend" data-blend>
+          <div class="blend__labels">
+            <span>Physical Model</span><span>Body Samples</span>
+          </div>
+          <div class="blend__track" role="slider" tabindex="0"
+               aria-label="Engine blend" aria-valuemin="0" aria-valuemax="100"
+               aria-valuenow="100" aria-valuetext="100% physical model">
+            <span class="blend__thumb" aria-hidden="true"></span>
+            <span class="blend__read" aria-hidden="true">100</span>
+          </div>
+        </div>
+        <div class="macros" aria-label="Macro controls">
+          <div class="knob" data-param="macro.resonance" data-min="0" data-max="1" data-value="0.74">
+            <div class="knob__dial" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="74" aria-label="Resonance"></div>
+            <span class="knob__label">Resonance</span>
+            <span class="knob__val knob__val--dyn">74%</span>
+          </div>
+          <div class="knob" data-param="macro.buzz" data-min="0" data-max="1" data-value="0.42">
+            <div class="knob__dial" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="42" aria-label="Buzz rattle"></div>
+            <span class="knob__label">Buzz Rattle</span>
+            <span class="knob__val knob__val--dyn">42%</span>
+          </div>
+          <div class="knob" data-param="macro.brightness" data-min="0" data-max="1" data-value="0.6">
+            <div class="knob__dial" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="60" aria-label="Brightness"></div>
+            <span class="knob__label">Brightness</span>
+            <span class="knob__val knob__val--dyn">60%</span>
+          </div>
         </div>
       </div>
 
-      <div class="playrow">
-        <div class="fader fader--master" data-param="master">
-          <label class="fader__label" for="master">Master</label>
-          <input class="range" type="range" id="master" min="0" max="1" step="0.01" value="0.8">
-          <output class="fader__val" for="master">0.80</output>
-        </div>
-        <div class="meter" id="meter" aria-label="Output level" role="img">
-          <div class="meter__ch"><i class="meter__fill" data-ch="l"></i></div>
-          <div class="meter__ch"><i class="meter__fill" data-ch="r"></i></div>
+      <div class="panel panel--master">
+        <h2 class="panel__h">Master Output</h2>
+        <div class="master-row">
+          <div class="fader fader--master" data-param="master">
+            <label class="fader__label" for="master">Level</label>
+            <input class="range" type="range" id="master" min="0" max="1" step="0.01" value="0.8">
+            <output class="fader__val" for="master">0.80</output>
+          </div>
+          <div class="meter" id="meter" aria-label="Output level" role="img">
+            <div class="meter__ch"><i class="meter__fill" data-ch="l"></i></div>
+            <div class="meter__ch"><i class="meter__fill" data-ch="r"></i></div>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- TINE · mode gains + tine shaping + scope -->
+    <!-- TINE · mode ratios + mod chips + scope -->
     <section class="view view--tine" data-page="tine" hidden>
       <div class="panel">
-        <h2 class="panel__h">Mode gains</h2>
-        <div class="fader-row">
-          <div class="fader" data-param="mode1">
-            <label class="fader__label" for="m1">Mode 1</label>
-            <input class="range" type="range" id="m1" min="0" max="1" step="0.01" value="1">
-            <output class="fader__val" for="m1">1.00</output>
-          </div>
-          <div class="fader" data-param="mode2">
-            <label class="fader__label" for="m2">Mode 2</label>
-            <input class="range" type="range" id="m2" min="0" max="1" step="0.01" value="0.55">
-            <output class="fader__val" for="m2">0.55</output>
-          </div>
-          <div class="fader" data-param="mode3">
-            <label class="fader__label" for="m3">Mode 3</label>
-            <input class="range" type="range" id="m3" min="0" max="1" step="0.01" value="0.30">
-            <output class="fader__val" for="m3">0.30</output>
-          </div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h2 class="panel__h">Tine shaping</h2>
+        <h2 class="panel__h">Modal Tine Synthesizer (3 modes)</h2>
         <div class="knob-grid">
-          <div class="knob" data-param="stiffness" data-min="0" data-max="1" data-value="0.5">
-            <div class="knob__dial" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-label="Stiffness"></div>
-            <span class="knob__label">Stiffness</span>
+          <div class="knob" data-param="mode1" data-min="0" data-max="1" data-value="1">
+            <div class="knob__dial" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" aria-label="Mode 1 fundamental"></div>
+            <span class="knob__label">Mode 1 · Fundamental</span>
+            <span class="knob__val">1.00×</span>
           </div>
-          <div class="knob" data-param="decay" data-min="0" data-max="1" data-value="0.6">
-            <div class="knob__dial" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="60" aria-label="Decay"></div>
-            <span class="knob__label">Decay</span>
+          <div class="knob" data-param="mode2" data-min="0" data-max="1" data-value="0.55">
+            <div class="knob__dial" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="55" aria-label="Mode 2 overtone"></div>
+            <span class="knob__label">Mode 2 · Overtone</span>
+            <span class="knob__val">2.61×</span>
           </div>
-          <div class="knob" data-param="damping" data-min="0" data-max="1" data-value="0.35">
-            <div class="knob__dial" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="35" aria-label="Damping"></div>
-            <span class="knob__label">Damping</span>
-          </div>
-          <div class="knob" data-param="strike" data-min="0" data-max="1" data-value="0.5">
-            <div class="knob__dial" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-label="Strike hardness"></div>
-            <span class="knob__label">Strike</span>
+          <div class="knob" data-param="mode3" data-min="0" data-max="1" data-value="0.3">
+            <div class="knob__dial" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="30" aria-label="Mode 3 high inharmonic"></div>
+            <span class="knob__label">Mode 3 · High</span>
+            <span class="knob__val">4.24×</span>
           </div>
         </div>
+        <div class="mod-strip" aria-label="Per-parameter modulation">
+          <span class="mod-strip__label">Modulated by</span>
+          <span class="mod-chip">Velocity → Mode 2 (+24%)</span>
+          <span class="mod-chip">Key Pos → Damp (−12%)</span>
+        </div>
       </div>
-
-      <canvas class="scope" id="scope" width="512" height="96" aria-hidden="true"></canvas>
+      <div class="panel panel--scope">
+        <h2 class="panel__h">Realtime Scope</h2>
+        <canvas class="scope" id="scope" width="512" height="96" aria-hidden="true"></canvas>
+      </div>
     </section>
 
-    <!-- BODY · resonator + deze -->
+    <!-- BODY · resonator + deze plots -->
     <section class="view view--body" data-page="body" hidden>
       <div class="panel">
-        <h2 class="panel__h">Body · deze</h2>
-        <div class="knob-grid">
-          <div class="knob" data-param="buzz" data-min="0" data-max="1" data-value="0.2">
-            <div class="knob__dial" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="20" aria-label="Buzz"></div>
-            <span class="knob__label">Buzz</span>
-          </div>
-          <div class="knob" data-param="gourd" data-min="0" data-max="1" data-value="0.4">
-            <div class="knob__dial" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="40" aria-label="Gourd resonance"></div>
-            <span class="knob__label">Gourd</span>
-          </div>
-        </div>
-        <p class="note note--provisional">Gourd resonance is a placeholder approximation (amendment 4.9 — real tunings pending).</p>
+        <h2 class="panel__h">Soundboard 5-band</h2>
+        <div class="plot" aria-hidden="true"><svg viewBox="0 0 300 110" preserveAspectRatio="none">
+          <path d="M 5 95 Q 60 10, 115 70 T 235 35 T 295 95" fill="none" stroke="var(--ok)" stroke-width="2"/>
+          <circle cx="70" cy="42" r="4" fill="var(--accent)"/>
+          <circle cx="185" cy="55" r="4" fill="var(--accent)"/>
+        </svg></div>
+        <p class="note note--provisional">Gourd resonance is a placeholder approximation pending real recordings (amendment 4.9).</p>
       </div>
-    </section>
-
-    <!-- SAMPLES · honest empty placeholder -->
-    <section class="view view--samples" data-page="samples" hidden>
-      <div class="samples">
-        <h2 class="panel__h">Samples</h2>
-        <div class="samples__empty" role="status">
-          <p class="samples__title">No samples loaded</p>
-          <p class="note">Sample-based body augmentation is a later milestone (M3, when the
-            Zimbabwean recordings land). This page intentionally has no sample engine and no
-            fake controls.</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- FX · insert chips -->
-    <section class="view view--fx" data-page="fx" hidden>
       <div class="panel">
-        <h2 class="panel__h">Effects rack</h2>
-        <div class="fx" aria-label="Effects rack">
-          <button class="insert" data-fx="reverb" aria-pressed="true">Reverb</button>
-          <button class="insert" data-fx="delay"  aria-pressed="false">Delay</button>
-          <button class="insert" data-fx="drive"  aria-pressed="false">Drive</button>
-          <button class="insert insert--add" disabled title="Slot reserved (M2)">+</button>
+        <h2 class="panel__h">Deze · non-linear buzz gate</h2>
+        <div class="plot" aria-hidden="true"><svg viewBox="0 0 300 110" preserveAspectRatio="none">
+          <line x1="15" y1="95" x2="285" y2="95" stroke="var(--line)" stroke-width="2"/>
+          <line x1="15" y1="95" x2="285" y2="15" stroke="var(--accent-hot)" stroke-width="2" stroke-dasharray="5"/>
+        </svg></div>
+        <p class="note note--provisional">Gate curve shown is typical; real deze behaviour to be verified with recordings.</p>
+      </div>
+    </section>
+
+    <!-- SAMPLES · layer strip (engine is future — honest pending) -->
+    <section class="view view--samples" data-page="samples" hidden>
+      <div class="panel">
+        <h2 class="panel__h">Sample Layer Strip</h2>
+        <div class="samples-list" id="samplesList">
+          <div class="sample-layer" data-layer="gourd">
+            <span class="sample-layer__name">Gourd Resonator Room</span>
+            <span class="sample-layer__file">body_micA.wav</span>
+            <div class="layer-btns" role="group" aria-label="Gourd layer solo-mute">
+              <button class="btn-mini" data-mute aria-pressed="false" title="Mute">M</button>
+              <button class="btn-mini" data-solo aria-pressed="false" title="Solo">S</button>
+            </div>
+          </div>
+          <div class="sample-layer" data-layer="board">
+            <span class="sample-layer__name">Board Strike Knock</span>
+            <span class="sample-layer__file">wood_knock.wav</span>
+            <div class="layer-btns" role="group" aria-label="Board layer solo-mute">
+              <button class="btn-mini" data-mute aria-pressed="false" title="Mute">M</button>
+              <button class="btn-mini" data-solo aria-pressed="false" title="Solo">S</button>
+            </div>
+          </div>
+          <div class="sample-layer" data-layer="buzz">
+            <span class="sample-layer__name">Reference Tine Buzz</span>
+            <span class="sample-layer__file">buzz_bottlecap.wav</span>
+            <div class="layer-btns" role="group" aria-label="Buzz layer solo-mute">
+              <button class="btn-mini" data-mute aria-pressed="false" title="Mute">M</button>
+              <button class="btn-mini" data-solo aria-pressed="false" title="Solo">S</button>
+            </div>
+          </div>
+        </div>
+        <p class="note note--provisional">Sample engine arrives M3 when the Zimbabwean recordings land — layers listed are placeholders pending those files.</p>
+      </div>
+    </section>
+
+    <!-- FX · rack -->
+    <section class="view view--fx" data-page="fx" hidden>
+      <div class="fx-rack" aria-label="Effects rack">
+        <div class="fx-card" data-fx="reverb">
+          <div class="fx-card__head"><span class="fx-card__name">1·Reverb</span>
+            <button class="toggle" data-enable aria-pressed="true" aria-label="Reverb enabled"></button>
+          </div>
+          <div class="knob" data-param="fx.reverb.decay" data-min="0" data-max="1" data-value="0.5">
+            <div class="knob__dial" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-label="Space decay"></div>
+            <span class="knob__label">Space</span>
+          </div>
+        </div>
+        <div class="fx-card" data-fx="delay">
+          <div class="fx-card__head"><span class="fx-card__name">2·Delay</span>
+            <button class="toggle" data-enable aria-pressed="true" aria-label="Delay enabled"></button>
+          </div>
+          <div class="knob" data-param="fx.delay.feedback" data-min="0" data-max="1" data-value="0.4">
+            <div class="knob__dial" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="40" aria-label="Feedback"></div>
+            <span class="knob__label">Feedback</span>
+          </div>
+        </div>
+        <div class="fx-card" data-fx="drive">
+          <div class="fx-card__head"><span class="fx-card__name">3·Drive</span>
+            <button class="toggle" data-enable aria-pressed="false" aria-label="Drive enabled"></button>
+          </div>
+          <div class="knob" data-param="fx.drive.warmth" data-min="0" data-max="1" data-value="0.3">
+            <div class="knob__dial" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="30" aria-label="Warmth"></div>
+            <span class="knob__label">Warmth</span>
+          </div>
+        </div>
+        <div class="fx-card" data-fx="spatial">
+          <div class="fx-card__head"><span class="fx-card__name">4·Spatial</span>
+            <button class="toggle" data-enable aria-pressed="false" aria-label="Spatial width enabled"></button>
+          </div>
+          <div class="knob" data-param="fx.spatial.width" data-min="0" data-max="1" data-value="0.3">
+            <div class="knob__dial" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="30" aria-label="Width"></div>
+            <span class="knob__label">Width</span>
+          </div>
         </div>
       </div>
     </section>
 
   </main>
 
-  <!-- ── status bar (persistent) ────────────────────────────── -->
+  <!-- ── status bar (persistent) ──────────────────────────── -->
   <footer class="statusbar">
     <span class="status" id="st-midi"><i class="dot dot--warn"></i>MIDI: unverified</span>
-    <span class="status" id="st-voices">Voices 0 / 37</span>
-    <span class="status" id="st-cpu">CPU —</span>
-    <span class="status status--right" id="st-help">Keys: <kbd>A</kbd>–<kbd>J</kbd> / <kbd>Q</kbd>–<kbd>U</kbd> / <kbd>Z</kbd>–<kbd>M</kbd> · <kbd>Esc</kbd> damp</span>
+    <span class="status">Voices <strong id="st-voices">0</strong> / 37</span>
+    <span class="status">CPU <strong id="st-cpu">—</strong></span>
+    <span class="status status--right">Keys: <kbd>Q</kbd>–<kbd>U</kbd> / <kbd>A</kbd>–<kbd>J</kbd> / <kbd>Z</kbd>–<kbd>M</kbd> · <kbd>Esc</kbd> damp</span>
   </footer>
 
 </div>
