@@ -70,6 +70,14 @@ const cfg = {
   instrumentName: 'Default 64-voice range',
   buzzIntensity: 0.0,    // 0..1 (off by default until the player weighs in)
   buzzChar: 3200.0,      // Hz, PROVISIONAL
+  // --- modulator framework (Pigments-style sources -> destinations) ---------
+  // Defaults are no-ops: attack ~= instant, sustain = 1, release = M1 value,
+  // LFO depths 0, random/velocity depths = M1 behaviour.
+  adsr: { attack: 0.0002, release: 0.03, sustain: 1.0 }, // seconds / level
+  lfo: { rate: 5.0 },                                    // Hz
+  mod: { lfoToMaster: 0.0, lfoToPitch: 0.0 },            // route depths
+  random: { amount: 0.04 },                              // per-note variation depth
+  vel: { amp: 1.0, bright: 1.0 },                        // velocity->amp/brightness depths
 };
 
 // Per-tine modal overrides: midiNote -> { ratios?, taus?, gains? } (JSON-driven).
@@ -120,10 +128,10 @@ function smoothConst(key, value, tau = 0.03) {
 
 function computeGains(note, velocity, trig) {
   const st = ensureState(note);
-  const v = Math.max(0.0, Math.min(1.0, velocity / 127.0));
-  const b = 0.5 + 0.5 * v;
+  const v = Math.max(0.0, Math.min(1.0, velocity / 127.0)) * cfg.vel.amp;
+  const b = 0.5 + 0.5 * Math.min(1.0, v * cfg.vel.bright);
   const h = hash01(note, trig);
-  const variation = 1.0 + 0.04 * (h - 0.5); // +/-2% deterministic amplitude jitter
+  const variation = 1.0 + cfg.random.amount * (h - 0.5); // deterministic per-note jitter
   const g = [];
   for (let i = 0; i < 3; ++i) {
     const base = BASE_GAINS[i] * v * Math.pow(b, i);
@@ -136,11 +144,16 @@ function computeGains(note, velocity, trig) {
   return g;
 }
 
-function buildVoiceGraph(st) {
+function buildVoiceGraph(st, lfo) {
   const note = st.note;
   const trig = el.const({ key: `trig.${note}`, value: st.trig });
   const edge = el.sub(trig, el.z(trig)); // fires on every increment of the counter
   const { ratios, taus } = ratiosFor(st);
+
+  // LFO -> pitch (depth const keyed; 0 = no modulation). Audio-rate: cycle
+  // takes the modulated frequency node directly.
+  const pitchDepth = el.const({ key: 'mod.lfoToPitch', value: cfg.mod.lfoToPitch });
+  const freqMod = el.mul(st.freq, el.add(1.0, el.mul(pitchDepth, lfo)));
 
   const modes = [0, 1, 2].map((i) => {
     if (st.gains[i] === 0.0) return el.const({ key: `g${i}.${note}`, value: 0.0 });
@@ -149,17 +162,20 @@ function buildVoiceGraph(st) {
     return el.mul(
       el.const({ key: `g${i}.${note}`, value: st.gains[i] }),
       env,
-      el.cycle(st.freq * ratios[i]),
+      el.mul(el.cycle(el.mul(freqMod, ratios[i]))),
     );
   });
 
-  // Note-off release: near-instant attack on damp=1, ~280 ms one-pole to -80 dB.
-  const relEnv = el.env(
-    el.tau2pole(0.0002),
-    el.tau2pole(0.03),
-    el.const({ key: `damp.${note}`, value: st.damp }),
-  );
-  return el.mul(MASTER_DEFAULT, relEnv, el.add(...modes));
+  // ADSR-shaped amp envelope on the damp gate: el.env gives near-instant
+  // attack (tau = adsr.attack) and one-pole release (tau = adsr.release).
+  // Sustain level s blends: out = s + (1-s)*env. s=1 reproduces the M1 sound.
+  const atk = el.const({ key: 'adsr.attack', value: cfg.adsr.attack });
+  const rel = el.const({ key: 'adsr.release', value: cfg.adsr.release });
+  const relEnv = el.env(el.tau2pole(atk), el.tau2pole(rel),
+                        el.const({ key: `damp.${note}`, value: st.damp }));
+  const sus = el.const({ key: 'adsr.sustain', value: cfg.adsr.sustain });
+  const ampEnv = el.add(sus, el.mul(el.sub(1.0, sus), relEnv));
+  return el.mul(ampEnv, el.add(...modes));
 }
 
 // ---- Shared body chain (stable keys => persistent state, spec 4.5) ---------
@@ -216,15 +232,23 @@ function buildBodyChain(busL, busR) {
 }
 
 function renderAll() {
+  // One shared LFO oscillator node; routes read its value at audio rate.
+  const lfo = el.cycle(el.const({ key: 'lfo.rate', value: cfg.lfo.rate }));
   const chans = [[], []];
   for (const st of voiceState.values()) {
-    const g = buildVoiceGraph(st);
+    const g = buildVoiceGraph(st, lfo);
     chans[0].push(g);
     chans[1].push(g);
   }
   const dryL = chans[0].length ? el.add(...chans[0]) : el.const({ key: 'bus.zero', value: 0.0 });
   const dryR = chans[1].length ? el.add(...chans[1]) : el.const({ key: 'bus.zero.R', value: 0.0 });
-  const [outL, outR] = buildBodyChain(dryL, dryR);
+  let [outL, outR] = buildBodyChain(dryL, dryR);
+  // Master now lives on the bus; LFO -> master (tremolo) modulates around it.
+  const master = smoothConst('master', cfg.master, 0.05);
+  const lfoGain = el.add(1.0, el.mul(el.const({ key: 'mod.lfoToMaster', value: cfg.mod.lfoToMaster }), lfo));
+  const outGain = el.mul(master, lfoGain);
+  outL = el.mul(outGain, outL);
+  outR = el.mul(outGain, outR);
   core.render(outL, outR);
 }
 
@@ -353,6 +377,16 @@ function setParam(name, value) {
     case 'gourdFreq': cfg.gourdFreq = value; break;
     case 'buzzIntensity': cfg.buzzIntensity = value; break;
     case 'buzzChar': cfg.buzzChar = value; break;
+    // modulator framework
+    case 'adsr.attack': cfg.adsr.attack = Math.max(0.0002, value); break;
+    case 'adsr.release': cfg.adsr.release = Math.max(0.005, value); break;
+    case 'adsr.sustain': cfg.adsr.sustain = Math.max(0.0, Math.min(1.0, value)); break;
+    case 'lfo.rate': cfg.lfo.rate = Math.max(0.01, value); break;
+    case 'mod.lfoToMaster': cfg.mod.lfoToMaster = value; break;
+    case 'mod.lfoToPitch': cfg.mod.lfoToPitch = value; break;
+    case 'random.amount': cfg.random.amount = value; break;
+    case 'vel.amp': cfg.vel.amp = value; break;
+    case 'vel.bright': cfg.vel.bright = value; break;
     default: throw new Error(`unknown param: ${name}`);
   }
   renderAll();

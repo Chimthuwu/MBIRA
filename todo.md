@@ -83,3 +83,4 @@
 - [x] DSP loadInstrument(jsonText): voice pool rebuilds from instrument key list, per-tine overrides, body reconfig. Host loads at startup (MBIRA_INSTRUMENT env) and feeds schematic geometry to the UI keyboard. Evidence: inst-dzavadzimu.wav vs inst-nyunga.wav (audibly distinct).
 - [ ] Modulator framework (Pigments-style: velocity/keymap/ADSR/LFO/random sources -> params) - next core chunk.
 - [ ] UI: instrument selector; mod page; sample-layer strip (augmented engine).
+- [x] Modulator framework v1: per-voice ADSR (attack/release/sustain), shared LFO -> master (tremolo) and -> pitch (audio-rate), random depth, velocity depth params; all via setParam, defaults = M1 sound. Interim panel has a MODULATORS row. Verified: 5 Hz tremolo ripple, 2 Hz pitch sweep 260-270 Hz, swell+release envelope. Full routing matrix + sample-layer engine = next.

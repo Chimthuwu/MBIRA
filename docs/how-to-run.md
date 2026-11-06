@@ -79,3 +79,22 @@ The standalone/plugin loads `src/instruments/mbira-dzavadzimu.json` at startup
 keyboard layout in the UI comes from the loaded instrument's schematic
 coordinates. Edit the JSON to change tunings/layouts - no code changes needed
 (all marked PROVISIONAL). Validate with `npm test`.
+
+## Modulator framework (M2, Pigments-style)
+
+Named parameters (UI binds via `setParam`):
+
+| Param | Range | Default |
+|---|---|---|
+| `adsr.attack` / `adsr.release` | 0.2 ms - 0.5 s / 5 ms - 2 s | instant / 30 ms |
+| `adsr.sustain` | 0-1 | 1 |
+| `lfo.rate` | 0.1-20 Hz | 5 |
+| `mod.lfoToPitch` | depth (0.01 = ~+/-1%) | 0 |
+| `mod.lfoToMaster` | depth (tremolo) | 0 |
+| `random.amount` | per-note jitter depth | 0.04 |
+| `vel.amp` / `vel.bright` | velocity->amp/brightness | 1 / 1 |
+
+Defaults reproduce the M1 sound exactly (within ~0.4 dB from the master-bus
+move). The interim Win32 panel has a MODULATORS row with these controls;
+the WebView2 UI should build the full routing matrix on this param set.
+Evidence: evidence/wav-m2/mod-tremolo.wav, mod-pitch.wav, mod-adsr.wav.

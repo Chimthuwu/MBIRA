@@ -1,0 +1,1 @@
+{"events": [{"t": 0.2, "type": "param", "name": "adsr.attack", "value": 0.5}, {"t": 0.2, "type": "param", "name": "adsr.sustain", "value": 0.25}, {"t": 0.2, "type": "param", "name": "adsr.release", "value": 1.0}, {"t": 0.3, "type": "on", "note": 60, "vel": 100}, {"t": 2.0, "type": "off", "note": 60}]}

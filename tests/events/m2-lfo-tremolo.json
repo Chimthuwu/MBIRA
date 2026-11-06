@@ -1,0 +1,1 @@
+{"events": [{"t": 0.2, "type": "param", "name": "mod.lfoToMaster", "value": 0.6}, {"t": 0.2, "type": "param", "name": "lfo.rate", "value": 5.0}, {"t": 0.3, "type": "on", "note": 60, "vel": 100}]}
