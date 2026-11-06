@@ -44,3 +44,25 @@
 - [x] M1: architecture-decision.md finished (VST3 decision + verified licences in LICENSES.md).
 - [x] M1 COMPLETE - STOPPING per Part A section 1. Final report delivered in chat.
 - Open for human: listen to evidence/wav/*.wav; run docs/vst3-host-test-checklist.md in Ableton; provide MIDI device/loopMIDI; answer Steinberg licence + tuning questions (4.9).
+
+## UI scaffold (2026-11-07)
+
+- [x] Web UI scaffold dropped in as `ui/` (vanilla HTML/CSS/JS, no build, no CDN):
+  `index.html` + `css/tokens.css` + `css/app.css` + `js/{bridge,layout,keyboard,controls,main}.js`
+  + `README.md`. Allowlisted `{v,type,id,payload}` envelope in `bridge.js`
+  (`ui.ready`, `param.set`, `note.on/off`, `panic`, `preset.*`, `instrument.select`).
+  21 tines (3 rows × 7, placeholder C-major spread per 4.9), pointer/touch/QWERTY
+  input, faders/knobs/insert chips/meter/scope, mock host (`__MBIRA_MOCK__`).
+- [x] Verified in browser (local http, file:// blocked by harness): 21 tines in
+  DOM, QWERTY `a` → MIDI 60 note-on with `.is-on`, keyup → off, fader input
+  updates readout. Screenshot: `ui-preview.png`. JS syntax clean
+  (`node --check` × 5).
+- [ ] WebView2 viability spike — wire `bridge.js` to `window.chrome.webview`
+  (virtual-host mapping, `ui.ready` gate, ≤30 Hz telemetry). Per scaffold §15,
+  if this fails the token/component spec survives but the transport does not.
+- [ ] Open questions still blocking UI (see `ui/README.md`): real tunings (4.9),
+  voice-count display (37 vs M2 64), MIDI status semantics.
+- Note: separate native `src/native/ui.h` (uncommitted WIP, `mbira_ui::State`
+  wired into `main.cpp` live MIDI path) exists alongside this WebView2 UI —
+  they are independent; `src/dsp/index.js` currently gutted to a 1-line
+  "M2 rewrite marker" (also uncommitted WIP, NOT committed here).

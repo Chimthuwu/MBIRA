@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'">
+<title>MBIRA</title>
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- ── top bar ───────────────────────────────────────────── -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand__mark" aria-hidden="true"></span>
+      <span class="brand__name">MBIRA</span>
+      <span class="brand__sub">dzaVadzimu</span>
+    </div>
+
+    <div class="topbar__mid">
+      <label class="field">
+        <span class="field__label">Preset</span>
+        <select class="select" id="preset">
+          <option>Init — Nyamaropa (placeholder)</option>
+          <option>Init — Gandanga (placeholder)</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="topbar__right">
+      <button class="btn btn--warn" id="panic" title="All-damp (Esc)">Panic</button>
+      <button class="btn btn--icon" id="settings" title="Settings" aria-label="Settings">⚙</button>
+    </div>
+  </header>
+
+  <!-- ── stage ─────────────────────────────────────────────── -->
+  <main class="stage">
+
+    <!-- hero: playable tine keyboard -->
+    <section class="keyboard-wrap" aria-label="Tine keyboard">
+      <div class="board" id="board">
+        <div class="board__bridge" aria-hidden="true"></div>
+        <div class="board__glow" aria-hidden="true"></div>
+        <div class="tines" id="tines" role="group" aria-label="Tines"></div>
+      </div>
+    </section>
+
+    <!-- panels -->
+    <section class="panels">
+
+      <div class="panel" aria-labelledby="h-strip">
+        <h2 class="panel__h" id="h-strip">Strip</h2>
+
+        <div class="fader-row">
+          <div class="fader" data-param="mode1">
+            <label class="fader__label" for="m1">Mode 1</label>
+            <input class="range" type="range" id="m1" min="0" max="1" step="0.01" value="1">
+            <output class="fader__val" for="m1">1.00</output>
+          </div>
+          <div class="fader" data-param="mode2">
+            <label class="fader__label" for="m2">Mode 2</label>
+            <input class="range" type="range" id="m2" min="0" max="1" step="0.01" value="0.55">
+            <output class="fader__val" for="m2">0.55</output>
+          </div>
+          <div class="fader" data-param="mode3">
+            <label class="fader__label" for="m3">Mode 3</label>
+            <input class="range" type="range" id="m3" min="0" max="1" step="0.01" value="0.30">
+            <output class="fader__val" for="m3">0.30</output>
+          </div>
+        </div>
+
+        <div class="strip__bottom">
+          <div class="fader fader--master" data-param="master">
+            <label class="fader__label" for="master">Master</label>
+            <input class="range" type="range" id="master" min="0" max="1" step="0.01" value="0.8">
+            <output class="fader__val" for="master">0.80</output>
+          </div>
+          <div class="meter" id="meter" aria-label="Output level" role="img">
+            <div class="meter__ch"><i class="meter__fill" data-ch="l"></i></div>
+            <div class="meter__ch"><i class="meter__fill" data-ch="r"></i></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" aria-labelledby="h-tone">
+        <h2 class="panel__h" id="h-tone">Tone</h2>
+
+        <div class="knob-grid">
+          <div class="knob" data-param="stiffness" data-min="0" data-max="1" data-value="0.5">
+            <div class="knob__dial" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-label="Stiffness"></div>
+            <span class="knob__label">Stiffness</span>
+          </div>
+          <div class="knob" data-param="decay" data-min="0" data-max="1" data-value="0.6">
+            <div class="knob__dial" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="60" aria-label="Decay"></div>
+            <span class="knob__label">Decay</span>
+          </div>
+          <div class="knob" data-param="damping" data-min="0" data-max="1" data-value="0.35">
+            <div class="knob__dial" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="35" aria-label="Damping"></div>
+            <span class="knob__label">Damping</span>
+          </div>
+          <div class="knob" data-param="strike" data-min="0" data-max="1" data-value="0.5">
+            <div class="knob__dial" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-label="Strike hardness"></div>
+            <span class="knob__label">Strike</span>
+          </div>
+          <div class="knob" data-param="buzz" data-min="0" data-max="1" data-value="0.2">
+            <div class="knob__dial" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="20" aria-label="Buzz"></div>
+            <span class="knob__label">Buzz</span>
+          </div>
+          <div class="knob" data-param="gourd" data-min="0" data-max="1" data-value="0.4">
+            <div class="knob__dial" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="40" aria-label="Gourd resonance"></div>
+            <span class="knob__label">Gourd</span>
+          </div>
+        </div>
+
+        <canvas class="scope" id="scope" width="512" height="96" aria-hidden="true"></canvas>
+      </div>
+
+    </section>
+
+    <!-- effects rack -->
+    <section class="fx" aria-label="Effects rack">
+      <button class="insert" data-fx="reverb" aria-pressed="true">Reverb</button>
+      <button class="insert" data-fx="delay"  aria-pressed="false">Delay</button>
+      <button class="insert" data-fx="drive"  aria-pressed="false">Drive</button>
+      <button class="insert insert--add" disabled title="Slot reserved (M2)">+</button>
+    </section>
+
+  </main>
+
+  <!-- ── status bar ────────────────────────────────────────── -->
+  <footer class="statusbar">
+    <span class="status" id="st-midi"><i class="dot dot--warn"></i>MIDI: unverified</span>
+    <span class="status" id="st-voices">Voices 0 / 37</span>
+    <span class="status" id="st-cpu">CPU —</span>
+    <span class="status status--right" id="st-help">Keys: <kbd>A</kbd>–<kbd>J</kbd> / <kbd>Q</kbd>–<kbd>U</kbd> / <kbd>Z</kbd>–<kbd>M</kbd> · <kbd>Esc</kbd> damp</span>
+  </footer>
+
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

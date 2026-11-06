@@ -1,0 +1,37 @@
+:root{
+  /* surfaces */
+  --bg-0:#0b0a09; --bg-1:#12100e; --bg-2:#1a1613; --panel:#1f1a16;
+  --panel-hi:#262019; --line:#332a23; --line-hi:#4a3d31;
+
+  /* wood */
+  --wood-0:#2a1d15; --wood-1:#402c1f; --wood-2:#5a3d29; --wood-3:#7a5236;
+
+  /* tine metal */
+  --tine-0:#5c626a; --tine-1:#8b929a; --tine-2:#c2c9d1; --tine-3:#eef2f6;
+
+  /* accent */
+  --accent:#f0a63c; --accent-hot:#ffd58a; --accent-dim:#8a5c1e;
+  --brass:#c9a227;
+  --ok:#67b86e; --warn:#e0a33a; --err:#d9534f;
+
+  /* text */
+  --text:#e9e1d6; --text-2:#a99c8d; --text-3:#6f6459;
+
+  /* type scale */
+  --font-ui:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+  --font-num:"Cascadia Mono",Consolas,ui-monospace,monospace;
+  --fs-11:11px; --fs-12:12px; --fs-13:13px; --fs-15:15px; --fs-19:19px; --fs-26:26px;
+
+  /* geometry */
+  --r-s:4px; --r-m:7px; --r-l:11px;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px;
+
+  /* motion — tine-down MUST read as instantaneous */
+  --t-down:18ms; --t-up:220ms; --t-glow:600ms;
+  --ease-out:cubic-bezier(.22,.61,.36,1);
+  --ease-in-out:cubic-bezier(.4,0,.2,1);
+}
+
+@media (prefers-reduced-motion: reduce){
+  :root{ --t-down:0ms; --t-up:0ms; --t-glow:120ms; }
+}
