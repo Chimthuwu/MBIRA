@@ -1,0 +1,21 @@
+{
+ "events": [
+  {
+   "t": 0.2,
+   "type": "param",
+   "name": "pluckPos",
+   "value": 0.0
+  },
+  {
+   "t": 0.5,
+   "type": "on",
+   "note": 60,
+   "vel": 100
+  },
+  {
+   "t": 3.0,
+   "type": "off",
+   "note": 60
+  }
+ ]
+}

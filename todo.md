@@ -100,3 +100,21 @@
 - [ ] Engine blend + body-layer samples: needs el.sample + recordings from the Zimbabwean collaborator. DSP hook next; UI = Body page strip (design agents own visuals).
 - [ ] UI: instrument selector; mod page; sample-layer strip (augmented engine).
 - [x] Modulator framework v1: per-voice ADSR (attack/release/sustain), shared LFO -> master (tremolo) and -> pitch (audio-rate), random depth, velocity depth params; all via setParam, defaults = M1 sound. Interim panel has a MODULATORS row. Verified: 5 Hz tremolo ripple, 2 Hz pitch sweep 260-270 Hz, swell+release envelope. Full routing matrix + sample-layer engine = next.
+
+
+## Milestone L — the listening set (started 2026-11-08, PAUSED here)
+
+- [x] Recovery audit: `docs/RECOVERY-AUDIT.md` (read-only; last trustworthy M1 baseline = `efb427a`, not `c9e5aea`).
+- [x] Baseline tagged `m1-baseline` = `efb427a` (M1 evidence is only reproducible from there; HEAD cannot reproduce it).
+- [x] Manifest for `evidence/wav-m2/` (missing since `3e69782`): `evidence/wav-m2/RECORDING-MANIFEST.md`.
+      7/17 files provenance-verified by byte-identical re-render; 3 are duplicates; 7 are NOT reproducible at HEAD (N-1).
+- [x] Listening pack rendered from HEAD `6293c17` -> `evidence/wav-listen/` (13 WAVs) + manifest with
+      per-file peak/RMS/band measurements and defects L-1..L-4.
+- [x] Blank human record: `docs/manual-test-results.md` (Part A human / Part B player / Part C L-1 / Part D open questions).
+- [ ] **BLOCKED ON A HUMAN: listen to `evidence/wav-listen/` and fill in `docs/manual-test-results.md`.**
+- [ ] Fix only what listening identifies. Objective defects already logged for the fix pass (not fixed here):
+      L-1 pluck position degenerate at 0/1 + 20 dB level swing (`index.js:141`, no normalisation),
+      L-2 buzz ships off (`intensity: 0.0` vs spec 0.2; path verified working, +6.7 dB at 2-8 kHz),
+      N-6 bad `MBIRA_INSTRUMENT` path crashes instead of falling back (`main.cpp:157-163`).
+- [ ] This satisfies `todo.md` M1 STOP + spec 8 gate **only after the human records the result.**
+      No UI / modulation / sample / FX / VST3 work before then (spec 0, spec 8).
