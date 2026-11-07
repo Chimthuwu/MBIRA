@@ -57,9 +57,23 @@
   DOM, QWERTY `a` → MIDI 60 note-on with `.is-on`, keyup → off, fader input
   updates readout. Screenshot: `ui-preview.png`. JS syntax clean
   (`node --check` × 5).
-- [ ] WebView2 viability spike — wire `bridge.js` to `window.chrome.webview`
-  (virtual-host mapping, `ui.ready` gate, ≤30 Hz telemetry). Per scaffold §15,
-  if this fails the token/component spec survives but the transport does not.
+- [x] WebView2 viability spike — SHIPPED (`46de4e2`). `src/native/webview_ui.h`
+  is a plain-COM (no WRL) WebView2 host: virtual-host mapping
+  `mbira.local` → `ui/` (ES modules + CSP load with no server), allowlisted
+  `{v,type,id,payload}` bridge both directions, telemetry pushed from `WM_TIMER`
+  at 30 Hz. `mbira-poc live` defaults to it (`--ui gdi` restores the Win32 panel).
+  Two root causes fixed: (1) `CtrlHandler` released the controller as soon as the
+  callback returned — that closed the WebView and killed `msedgewebview2`, giving
+  the blank white window; now `AddRef`'d for the app's lifetime and sized from the
+  client rect (`put_Bounds` was never called → 0×0) + resized on `WM_SIZE`.
+  (2) the param parser read `payload.name`, but the bridge sends the path in
+  `payload.path`, so every control became `__mbira.setParam('?', v)` and the DSP
+  threw `unknown param: ?`. Verified over CDP on the running native host:
+  `NavigationCompleted success=1`, `ui.ready`, 21 tines / 5 nav / 10 knobs,
+  `master`+`macro.*` reach the DSP, 0 JS errors. Evidence:
+  `evidence/standalone/native-host.png`. **Provisional:** `blend.engine`,
+  `fx.*`, `layer.*`, `mode1-3` have no DSP `setParam` case — UI-only for now
+  (logged once as provisional; adding them = sound-generation work, locked).
 - [ ] Open questions still blocking UI (see `ui/README.md`): real tunings (4.9),
   voice-count display (37 vs M2 64), MIDI status semantics.
 - Note: separate native `src/native/ui.h` (uncommitted WIP, `mbira_ui::State`
