@@ -42,6 +42,7 @@
 #include "RtAudio.h"
 #include "RtMidi.h"
 #include "ui.h"
+#include "webview_ui.h"
 
 // ---------------------------------------------------------------------------
 // WAV writer (16-bit PCM stereo)
@@ -331,8 +332,9 @@ static void runRender(Engine& eng, const std::string& wavPath,
 // Live mode
 
 static std::atomic<unsigned> g_xruns { 0 }; // RtAudio under/overflow flags
+static std::atomic<float> g_peakL { 0.0f }, g_peakR { 0.0f }; // last-block meter peaks
 
-static int runLive(Engine& eng, bool withUi, double autoQuitS) {
+static int runLive(Engine& eng, bool withUi, bool webviewUi, double autoQuitS) {
   RtAudio dac;
   if (dac.getDeviceCount() < 1) { fprintf(stderr, "ERROR: no audio devices found\n"); return 1; }
 
@@ -353,10 +355,13 @@ static int runLive(Engine& eng, bool withUi, double autoQuitS) {
     float* chans[2] { L, R };
     e->processAudio(chans, 2, nFrames);
     float* out = (float*) outputBuffer;
+    float pl = 0.0f, pr = 0.0f;
     for (size_t i = 0; i < nFrames; ++i) {
-      out[2 * i] = L[i];
-      out[2 * i + 1] = R[i];
+      out[2 * i] = L[i]; out[2 * i + 1] = R[i];
+      if (L[i] > pl || -L[i] > pl) pl = (L[i] > 0 ? L[i] : -L[i]);
+      if (R[i] > pr || -R[i] > pr) pr = (R[i] > 0 ? R[i] : -R[i]);
     }
+    g_peakL.store(pl); g_peakR.store(pr);
     return 0;
   };
 
@@ -430,7 +435,21 @@ static int runLive(Engine& eng, bool withUi, double autoQuitS) {
       std::lock_guard<std::mutex> lk(qMutex);
       if (q.size() < 1024) q.push_back(ev);
     };
-    mbira_ui::run(uiState, sink, paramSink, autoQuitS);   // returns when the window is closed
+    if (webviewUi) {
+      // Write the UI dir as an absolute path (virtual-host mapping needs it).
+      wchar_t absBuf[512]; DWORD n = GetFullPathNameW(L"ui", 512, absBuf, nullptr);
+      std::wstring uiDirW = n ? absBuf : L"ui";
+      std::string uiDir(uiDirW.begin(), uiDirW.end());
+      auto peakFn = [&](float* L, float* R) { *L = g_peakL.load(); *R = g_peakR.load(); };
+      fprintf(stderr, "WebView2 UI: %s\n", uiDir.c_str());
+      mbira_wv2::runWebView2(sink, paramSink, peakFn,
+                             uiDir,
+                             std::string("Z:/GITHUB/MBIRA/build/wv2-userdata"),
+                             std::string("Z:/GITHUB/MBIRA/build/liveui.log"),
+                             /*enableCdp=*/getenv("MBIRA_CDP") != nullptr);
+    } else {
+      mbira_ui::run(uiState, sink, paramSink, autoQuitS);   // returns when the window is closed
+    }
   } else {
     auto t0 = std::chrono::steady_clock::now();
     while (autoQuitS <= 0 || std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() < autoQuitS)
@@ -493,12 +512,13 @@ int main(int argc, char** argv) {
   }
 
   if (mode == "live") {
-    bool noUi = false; double quitS = 0;
+    bool noUi = false; bool webviewUi = true; double quitS = 0;
     for (int i = 2; i < argc; ++i) {
       if (!strcmp(argv[i], "--no-ui")) noUi = true;
+      else if (!strcmp(argv[i], "--ui") && i + 1 < argc) webviewUi = !strcmp(argv[++i], "webview");
       else if (!strcmp(argv[i], "--quit-after") && i + 1 < argc) quitS = atof(argv[++i]);
     }
-    return runLive(eng, !noUi, quitS);
+    return runLive(eng, !noUi, webviewUi, quitS);
   }
 
   fprintf(stderr, "unknown mode %s\n", mode.c_str());

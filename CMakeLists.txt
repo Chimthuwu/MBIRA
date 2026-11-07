@@ -24,11 +24,20 @@ target_include_directories(mbira-poc PRIVATE
   ${ELEM_DIR}/runtime
   ${ELEM_DIR}/cli/choc/text
   ${ELEM_DIR}/cli/choc/javascript
+  ${CMAKE_CURRENT_SOURCE_DIR}/deps/extract/webview2/sdk/build/native/include
 )
 target_link_libraries(mbira-poc PRIVATE rtaudio rtmidi)
 # MinGW: link stdc++exp? not needed; chrono/thread come with winpthreads (posix threads build)
 if(MINGW)
   target_link_libraries(mbira-poc PRIVATE winmm ole32 ws2_32 comctl32)
+  # WebView2 loader (import lib for WebView2Loader.dll, shipped next to the exe)
+  target_link_libraries(mbira-poc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/deps/extract/webview2/sdk/build/native/x64/WebView2Loader.dll.lib)
+  # copy the loader DLL beside the exe at build time
+  add_custom_command(TARGET mbira-poc POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      ${CMAKE_CURRENT_SOURCE_DIR}/deps/extract/webview2/sdk/runtimes/win-x64/native/WebView2Loader.dll
+      $<TARGET_FILE_DIR:mbira-poc>)
   # Fully static: the desktop shortcut runs outside the WinLibs PATH, so no
   # MinGW runtime DLLs (libwinpthread-1.dll etc.) may be needed at load time.
   target_link_options(mbira-poc PRIVATE -static)
