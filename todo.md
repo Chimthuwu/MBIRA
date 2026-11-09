@@ -117,6 +117,12 @@
       N-6 bad `MBIRA_INSTRUMENT` path falls back with a NOTE (exit 0); malformed keys validated before pool clear.
 - [x] Listening pack re-rendered from `cea9d24` -> `evidence/wav-listen/` (13 WAVs) + updated RECORDING-MANIFEST.md
       (buzz now +5.4 dB in 2-8 kHz on defaults; L-3 tuning / L-4 stereo still open).
+- [x] (2026-11-09) Hero keyboard rebuilt on the real instrument schematic (commit 190d147):
+      layout.js generated from src/instruments/*.json (interleaved 3-register fan, graded widths),
+      realistic board CSS (wood grain, rimmed soundhole, hold-down rail + screws, per-tine sheen),
+      note labels, dynamic QWERTY map (Q-P / A-L / Z-B), host posts `instrument` envelope on ui.ready.
+      Visual review pass: initial flat grid -> 9/10 (24 tines confirmed interleaved, click fires note.on through the bridge).
+      Note: instrument JSON geometry is still PROVISIONAL (spec 4.3) - layout updates automatically when tunings/coords land.
 - [ ] **BLOCKED ON A HUMAN: listen to `evidence/wav-listen/` (re-render 2) and fill in `docs/manual-test-results.md`.**
       Also pending: ear/eye check of the 2026-11-09 live-session fixes (MIDI tine lighting, master fader feel/limiter) on relaunch.
 - [ ] Remaining logged defects: L-3 instruments differ by decay only, not tuning (amendment 4.9 real tunings),
