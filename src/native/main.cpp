@@ -157,7 +157,18 @@ static std::string jsStringLiteral(const std::string& s) {
 static bool loadInstrumentFromDisk(Engine& eng) {
   const char* envp = getenv("MBIRA_INSTRUMENT");
   std::string path = envp ? envp : "src/instruments/mbira-dzavadzimu.json";
-  auto text = choc::file::loadFileAsString(path);
+  // N-6 fix: a missing/unreadable file used to throw out of loadFileAsString
+  // and crash the host. Any failure here falls back to the default pool.
+  std::string text;
+  try { text = choc::file::loadFileAsString(path); }
+  catch (const std::exception& e) {
+    fprintf(stderr, "NOTE: instrument JSON not readable (%s: %s) - using default 64-note pool\n",
+            path.c_str(), e.what());
+    return false;
+  } catch (...) {
+    fprintf(stderr, "NOTE: instrument JSON not readable (%s) - using default 64-note pool\n", path.c_str());
+    return false;
+  }
   if (text.empty()) {
     fprintf(stderr, "NOTE: instrument JSON not found (%s) - using default 64-note pool\n", path.c_str());
     return false;
@@ -167,22 +178,25 @@ static bool loadInstrumentFromDisk(Engine& eng) {
     return false;
   }
   choc::value::Value root;
-  try { root = choc::json::parse(text); }
-  catch (const choc::json::ParseError& e) { fprintf(stderr, "ERROR: bad instrument JSON: %s\n", e.what()); return false; }
-  g_geom.clear();
-  auto keys = root["keys"];
-  for (size_t i = 0; i < keys.size(); ++i) {
-    auto k = keys[(int) i];
-    mbira_ui::KeyGeom kg;
-    kg.note = (int) k["note"].get<int64_t>();
-    kg.x = (float) k["x"].get<double>();
-    kg.y = (float) k["y"].get<double>();
-    kg.len = (float) k["lengthPx"].get<double>();
-    g_geom.push_back(kg);
+  try {
+    root = choc::json::parse(text);
+    g_geom.clear();
+    auto keys = root["keys"];
+    for (size_t i = 0; i < keys.size(); ++i) {
+      auto k = keys[(int) i];
+      mbira_ui::KeyGeom kg;
+      kg.note = (int) k["note"].get<int64_t>();
+      kg.x = (float) k["x"].get<double>();
+      kg.y = (float) k["y"].get<double>();
+      kg.len = (float) k["lengthPx"].get<double>();
+      g_geom.push_back(kg);
+    }
+    g_canvasW = (float) root["canvas"]["width"].get<double>();
+    g_canvasH = (float) root["canvas"]["height"].get<double>();
+    g_instrumentName = root["name"].toString();
   }
-  g_canvasW = (float) root["canvas"]["width"].get<double>();
-  g_canvasH = (float) root["canvas"]["height"].get<double>();
-  g_instrumentName = root["name"].toString();
+  catch (const choc::json::ParseError& e) { fprintf(stderr, "ERROR: bad instrument JSON: %s\n", e.what()); return false; }
+  catch (const std::exception& e) { fprintf(stderr, "ERROR: bad instrument JSON geometry: %s\n", e.what()); g_geom.clear(); return false; }
   fprintf(stderr, "Instrument: %s (%d keys) from %s\n", g_instrumentName.c_str(), (int) g_geom.size(), path.c_str());
   return true;
 }
@@ -397,11 +411,15 @@ static int runLive(Engine& eng, bool withUi, bool webviewUi, double autoQuitS) {
     else if (status == 0x80 || (status == 0x90 && (*msg)[2] == 0)) { ev.kind = Event::NoteOff; ev.note = (*msg)[1]; }
     else return;
     if (ev.kind == Event::NoteOn) b->ui->noteOn(ev.note); else b->ui->noteOff(ev.note);
+    // Forward to WebView2 so tines light + voice count updates (guarded:
+    // queue is a no-op cost when GDI/--no-ui is in use).
+    mbira_wv2::wvEnqueueNote(ev.note, ev.kind == Event::NoteOn, ev.vel);
     std::lock_guard<std::mutex> lk(*b->m);
     if (b->q->size() < 1024) b->q->push_back(ev); // bounded; PoC drops newest on overflow
   }, &bridge);
   try {
     midi.openPort(0);
+    mbira_wv2::wvMarkMidiSeen();
     fprintf(stderr, "MIDI: port 0 = %s\n", midi.getPortName(0).c_str());
   } catch (RtMidiError& e) {
     fprintf(stderr, "MIDI: no input device (%s). The rendered WAVs do not need MIDI.\n", e.getMessage().c_str());

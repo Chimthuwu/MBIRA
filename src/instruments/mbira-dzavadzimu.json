@@ -670,6 +670,6 @@
  },
  "buzz": {
   "characterHz": 3200,
-  "intensity": 0.0
+  "intensity": 0.2
  }
 }

@@ -68,7 +68,7 @@ const cfg = {
   gourdAmount: 0.30,
   gourdFreq: 170.0,      // Hz, PROVISIONAL
   instrumentName: 'Default 64-voice range',
-  buzzIntensity: 0.0,    // 0..1 (off by default until the player weighs in)
+  buzzIntensity: 0.2,    // 0..1, spec default 0.2 (fix L-2: shipped off by mistake)
   buzzChar: 3200.0,      // Hz, PROVISIONAL
   // --- modulator framework (Pigments-style sources -> destinations) ---------
   // Defaults are no-ops: attack ~= instant, sustain = 1, release = M1 value,
@@ -135,14 +135,38 @@ function computeGains(note, velocity, trig) {
   const bTilt = 1.5 - cfg.macro.brightness; // macro 1.0 = brighter (smaller exponent, b<1)
   const h = hash01(note, trig);
   const variation = 1.0 + cfg.random.amount * (h - 0.5); // deterministic per-note jitter
+  const { ratios, taus } = ratiosFor(st);
+  // Pluck weighting (fix L-1): SIGNED sin(pi*(i+1)*p). The sign matters near
+  // the endpoints - plucking past a mode's antinode inverts that mode's phase
+  // relative to the others - so p and 1-p now give DIFFERENT timbres instead
+  // of collapsing onto the same floor-clamped gain set. |sin| < 0.10 keeps the
+  // 0.10 floor but preserves the sign.
+  const p = Math.max(0.0, Math.min(1.0, cfg.pluckPos));
+  const w = [];
+  for (let i = 0; i < 3; ++i) {
+    const s = Math.sin(Math.PI * (i + 1) * p);
+    w.push(Math.abs(s) < 0.10 ? (s < 0.0 ? -0.10 : 0.10) : s);
+  }
+  // Level normalisation (fix L-1): a mode's decayed energy is proportional to
+  // gain^2 * tau, so scale the gains so total voice energy matches the
+  // p=0.5 reference regardless of pluck position (was a 19.9 dB swing).
+  // Boost capped at +20 dB (sin weighting is near-node at the endpoints, so
+  // restoring level there needs a big lift; the bus soft-limiter guards).
+  const amp = (i) => BASE_GAINS[i] * v * Math.pow(b, i * bTilt);
+  const energy = (ws) => {
+    let e = 0.0;
+    for (let i = 0; i < 3; ++i) e += amp(i) * amp(i) * ws[i] * ws[i] * taus[i];
+    return e;
+  };
+  const refW = [1.0, 0.10, -1.0]; // w at p = 0.5 (the reference position)
+  const e = energy(w), eRef = energy(refW);
+  const norm = (e > 0.0 && eRef > 0.0) ? Math.min(10.0, Math.sqrt(eRef / e)) : 1.0;
   const g = [];
   for (let i = 0; i < 3; ++i) {
-    const base = BASE_GAINS[i] * v * Math.pow(b, i * bTilt);
-    const w = Math.max(0.10, Math.abs(Math.sin(Math.PI * (i + 1) * cfg.pluckPos)));
-    const r = ratiosFor(st).ratios[i];
+    const r = ratios[i];
     // Nyquist suppression with safety margin
     const audible = st.freq * r < 0.45 * cfg.sampleRate;
-    g.push(audible ? base * w * variation : 0.0);
+    g.push(audible ? amp(i) * w[i] * variation * norm : 0.0);
   }
   return g;
 }
@@ -248,11 +272,20 @@ function renderAll() {
   const dryR = chans[1].length ? el.add(...chans[1]) : el.const({ key: 'bus.zero.R', value: 0.0 });
   let [outL, outR] = buildBodyChain(dryL, dryR);
   // Master now lives on the bus; LFO -> master (tremolo) modulates around it.
-  const master = smoothConst('master', cfg.master, 0.05);
+  // 10 ms smoothing (was 50 ms: felt delayed on the fader). Rendering is
+  // unaffected — smoothing only changes SET_PROPERTY ramp time.
+  const master = smoothConst('master', cfg.master, 0.01);
   const lfoGain = el.add(1.0, el.mul(el.const({ key: 'mod.lfoToMaster', value: cfg.mod.lfoToMaster }), lfo));
   const outGain = el.mul(master, lfoGain);
   outL = el.mul(outGain, outL);
   outR = el.mul(outGain, outR);
+  // Soft limiter: tanh(k*x)/k is ~linear for small x, saturates gracefully
+  // past 1.0 instead of hard-clipping when master is raised with many voices.
+  // k=1.4: -2.5% at 0.22 master, ceiling ~0.71. Prevents harsh digital
+  // clipping; polyphonic sums above 1.0 compress instead of distorting.
+  const K = 1.4;
+  outL = el.div(el.tanh(el.mul(outL, K)), K);
+  outR = el.div(el.tanh(el.mul(outR, K)), K);
   core.render(outL, outR);
 }
 
@@ -313,6 +346,12 @@ function loadInstrument(jsonText) {
   const inst = JSON.parse(jsonText);
   if (!inst || !Array.isArray(inst.keys) || inst.keys.length === 0)
     throw new Error('instrument JSON has no keys');
+  // Validate every key BEFORE clearing the pool: a malformed file must leave
+  // the currently-loaded instrument and voice pool untouched.
+  for (const k of inst.keys) {
+    if (typeof k.note !== 'number' || typeof k.frequencyHz !== 'number')
+      throw new Error(`key missing note/frequencyHz: ${JSON.stringify(k).slice(0, 80)}`);
+  }
   instrumentName = inst.id || inst.name || 'unknown';
   if (inst.name) cfg.instrumentName = inst.name;
 
