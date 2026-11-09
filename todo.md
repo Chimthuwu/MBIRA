@@ -124,8 +124,32 @@
       Visual review pass: initial flat grid -> 9/10 (24 tines confirmed interleaved, click fires note.on through the bridge).
       Note: instrument JSON geometry is still PROVISIONAL (spec 4.3) - layout updates automatically when tunings/coords land.
 - [ ] **BLOCKED ON A HUMAN: listen to `evidence/wav-listen/` (re-render 2) and fill in `docs/manual-test-results.md`.**
-      Also pending: ear/eye check of the 2026-11-09 live-session fixes (MIDI tine lighting, master fader feel/limiter) on relaunch.
+- [x] (2026-11-09) HUMAN VERDICT (live session, user): "sounds and looks fine" - Milestone L listening gate SATISFIED.
+      New findings from that session (prepared, not yet executed - see "Next" below): dead controls; master fader clips at ~30%.
 - [ ] Remaining logged defects: L-3 instruments differ by decay only, not tuning (amendment 4.9 real tunings),
       L-4 no stereo image (mono-summed body chain).
 - [ ] This satisfies `todo.md` M1 STOP + spec 8 gate **only after the human records the result.**
-      No further UI / modulation / sample / FX / VST3 work before then (spec 0, spec 8).
+      No further UI / modulation / sample / FX / VST3 work before then (spec 0, spec 8). [SATISFIED 2026-11-09 - gate open]
+
+## Next — prepared 2026-11-09 (user session findings; NOT yet executed)
+
+- [ ] **P1 — master fader clips even at ~30%.** Diagnosis: `master` is applied PRE-limiter
+      (src/dsp/index.js:277-284: outGain = master*lfoGain, then tanh soft limiter k=1.4, ceiling ~0.71).
+      The limiter pins output at ~0.71 for any master above the point where the bus saturates, so the fader
+      only reshapes drive/distortion, not loudness; at 30% the tanh is already deep in saturation = perceived clipping.
+      Fix plan: move `master` trim POST-limiter (limiter becomes a pure safety), map the fader in dB
+      (e.g. -60..+6 dB, default -6), A/B render before/after to prove loudness now tracks the fader.
+      Verify with evidence/wav-listen-style measurements (peak + RMS vs fader position).
+- [ ] **P2 — "none of the other controls do shit".** Two distinct causes:
+      a) Knobs with NO DSP at all: `mode1/2/3` (partial mix), `fx.reverb.decay`, `fx.delay.feedback`,
+         `fx.drive.warmth`, `fx.spatial.width` (ui/index.html:105-222). Host correctly logs them as
+         provisional (webview_ui.h:274 dspAccepts list + :302 warning). Decide: implement in DSP (mode mix is
+         cheap; fx.* is M3 territory) or remove/hide until spec'd. Identity lock (todo #98) allows mod strips +
+         macros + blend only - fx page likely out of scope short-term: HIDE, don't fake.
+      b) Params in dspAccepts that SHOULD work (macros, adsr/lfo, gourd, buzz, soundboard, pluckPos) - user
+         says nothing moves. Before touching DSP, verify the live standalone path end-to-end: webview param.set
+         -> g_paramSink -> `__mbira.setParam('path',v)` expr -> running QuickJS bundle. Suspect: expr string
+         built with only 1 decimal `%.4f` is fine, but check g_paramSink is actually connected in live mode
+         (grep main.cpp for g_paramSink wiring) and that smoothConst('master',...) rebuilds don't get dropped.
+         Log per-param A/B evidence (render with MBIRA_RATIOSET-style param events) before claiming any fix.
+- [ ] After P1/P2: re-run the live-session test notes (docs/manual-test-results.md Part B) with the user.
