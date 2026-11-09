@@ -54,3 +54,29 @@ Play in this order, one at a time: `dz-soft` → `dz-hard` → `dz-phrase`.
 - Date: ____________ · Listener(s): ____________
 - Verdict (keep building / rework the model first / needs a player session first): ____________
 - Notes: ________________________________________________________________
+
+## Live playable session (WebView2 + microKEY, separate from the WAV pack)
+
+- Date: 2026-11-09 · Listener: Serge (playing, not A/B listening)
+- Build: `build-native/mbira-poc.exe live --block 256 --rate 48000` (pre-fix build for the session; fixes below need a relaunch to verify by ear)
+- Path: Desktop shortcut "MBIRA - current build" → `mbira-poc.exe live --block 256 --rate 48000` (WebView2 UI at `https://mbira.local/index.html`)
+
+### What the player reported (verbatim substance)
+
+1. First launch: UI window opened blank. Retry: UI rendered (dark theme, tines, blend at 100%, master 0.80).
+2. Played all notes on the microKEY MIDI controller: heard them fine, no latency, no weird clicks. Sound = fine.
+3. Keys lit ONLY when clicked in the UI — playing the MIDI controller did not light the tines.
+4. Design verdict: the keys hardly look like an mbira ("quite shit").
+5. None of the other controls worked at all (blend/engine, FX, layers, modes, macros as heard). Master fader worked, but felt delayed, and moving it up even a bit clipped.
+
+### What it means (diagnosed, not new listening)
+
+- "MIDI doesn't light": confirmed by code — the host only posted `telemetry` peaks, never `note.state`/`status` to the UI. Fixed in this pass (thread-safe queue in `src/native/webview_ui.h`, enqueue in `src/native/main.cpp` MIDI callback). **Needs ear/eye check on relaunch.**
+- "Other controls do nothing": by design at this stage — `blend.engine`, `fx.*`, `layer.*`, `mode1-3` are UI-only (no DSP `setParam`; `src/native/webview_ui.h dspAccepts` allowlist warns "provisional"). `macro.*` do reach the DSP, but `buzz.intensity = 0.0` in `src/instruments/mbira-dzavadzimu.json` (defect L-2) makes `macro.buzz` inaudible — consistent with "none work".
+- "Master delayed + clips": UI default was `0.8` vs DSP `MASTER_DEFAULT = 0.22` (jump on first touch) + 50 ms smoothing + ~140 `param.set` messages per drag (each triggers a full `renderAll()` rebuild) + no limiter. Fixed in this pass: UI default `0.8 → 0.22`, smoothing 50 ms → 10 ms, 40 ms-coalesced fader sends, `tanh` soft limiter in `src/dsp/index.js`. Verified headless only (render peak -7.11 dBFS, `xruns=0`, `npm test` green) — **needs ear check on relaunch.**
+
+### Still open (do not close the WAV gates above)
+
+- Parts A–D above are still unanswered. This session was live playing, not the `evidence/wav-listen/` A/B pack.
+- Visual redesign (real 24-key dzaVadzimu geometry from `src/instruments/mbira-dzavadzimu.json`, amendment 4.9) is deferred; the UI still uses the placeholder 21-tine grid.
+- Provisional controls (`blend/fx/layer/mode`) await the M3 sample engine; `macro.buzz` awaits a player decision on defect L-2.

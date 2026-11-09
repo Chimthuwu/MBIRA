@@ -111,10 +111,15 @@
 - [x] Listening pack rendered from HEAD `6293c17` -> `evidence/wav-listen/` (13 WAVs) + manifest with
       per-file peak/RMS/band measurements and defects L-1..L-4.
 - [x] Blank human record: `docs/manual-test-results.md` (Part A human / Part B player / Part C L-1 / Part D open questions).
-- [ ] **BLOCKED ON A HUMAN: listen to `evidence/wav-listen/` and fill in `docs/manual-test-results.md`.**
-- [ ] Fix only what listening identifies. Objective defects already logged for the fix pass (not fixed here):
-      L-1 pluck position degenerate at 0/1 + 20 dB level swing (`index.js:141`, no normalisation),
-      L-2 buzz ships off (`intensity: 0.0` vs spec 0.2; path verified working, +6.7 dB at 2-8 kHz),
-      N-6 bad `MBIRA_INSTRUMENT` path crashes instead of falling back (`main.cpp:157-163`).
+- [x] (2026-11-09, user authorised skipping the listen-first gate) Objective defects fixed at `cea9d24`:
+      L-1 signed+energy-normalised pluck weighting (RMS spread 19.9 dB -> 0.08 dB; endpoints distinct, mode-2 sign flip),
+      L-2 buzz ships at spec default 0.2 (cfg + both instrument JSONs),
+      N-6 bad `MBIRA_INSTRUMENT` path falls back with a NOTE (exit 0); malformed keys validated before pool clear.
+- [x] Listening pack re-rendered from `cea9d24` -> `evidence/wav-listen/` (13 WAVs) + updated RECORDING-MANIFEST.md
+      (buzz now +5.4 dB in 2-8 kHz on defaults; L-3 tuning / L-4 stereo still open).
+- [ ] **BLOCKED ON A HUMAN: listen to `evidence/wav-listen/` (re-render 2) and fill in `docs/manual-test-results.md`.**
+      Also pending: ear/eye check of the 2026-11-09 live-session fixes (MIDI tine lighting, master fader feel/limiter) on relaunch.
+- [ ] Remaining logged defects: L-3 instruments differ by decay only, not tuning (amendment 4.9 real tunings),
+      L-4 no stereo image (mono-summed body chain).
 - [ ] This satisfies `todo.md` M1 STOP + spec 8 gate **only after the human records the result.**
-      No UI / modulation / sample / FX / VST3 work before then (spec 0, spec 8).
+      No further UI / modulation / sample / FX / VST3 work before then (spec 0, spec 8).

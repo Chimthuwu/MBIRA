@@ -7,10 +7,24 @@ export function mountFaders(root){
     const out = f.querySelector('.fader__val');
     const param = f.dataset.param;
     const paint = () => { if (out) out.value = (+input.value).toFixed(2); };
+    // Throttle host sends (~40 ms coalesced, immediate paint): dragging a
+    // fader previously fired a param.set per input event (100+ host rebuilds
+    // per drag), which read as delay. Final value is flushed on 'change'.
+    let lastSent = 0;
+    let timer = 0;
+    let lastSentValue = +input.value;
+    const flush = () => {
+      const v = +input.value;
+      if (v !== lastSentValue) { lastSentValue = v; send('param.set', { path: param, value: v }); }
+      lastSent = performance.now();
+    };
     input.addEventListener('input', () => {
       paint();
-      send('param.set', { path: param, value: +input.value });
+      const now = performance.now();
+      if (now - lastSent >= 40) { clearTimeout(timer); flush(); }
+      else if (!timer) { timer = setTimeout(() => { timer = 0; flush(); }, 40 - (now - lastSent)); }
     });
+    input.addEventListener('change', () => { clearTimeout(timer); timer = 0; flush(); });
     paint();
   });
 }

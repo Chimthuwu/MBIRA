@@ -16,7 +16,9 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <deque>
 #include <functional>
+#include <mutex>
 #include <set>
 #include <string>
 
@@ -36,6 +38,25 @@ static NoteSink   g_noteSink;
 static ParamSink  g_paramSink;
 static PeakFn     g_peakFn;
 static FILE*      g_log = nullptr;
+
+// MIDI → UI forwarding (host drives UI highlighting). MIDI callback runs on
+// the RtMidi thread; the UI thread drains this queue each telemetry tick
+// and posts note.state / status via PostWebMessage (STA, UI thread only).
+struct WvNoteEvt { int note; bool on; int velocity; };
+static std::deque<WvNoteEvt> g_noteQueue;
+static std::mutex g_noteMutex;
+static std::atomic<bool> g_midiSeen { false };
+// UI-thread only: active notes (MIDI + UI clicks) for the voice count.
+static std::set<int> g_activeNotes;
+static bool g_lastMidiOk = false;
+static int g_lastVoices = -1;
+static bool g_statusDirty = false;
+
+inline void wvEnqueueNote(int note, bool on, int velocity) {
+  std::lock_guard<std::mutex> lk(g_noteMutex);
+  if (g_noteQueue.size() < 512) g_noteQueue.push_back({ note, on, velocity });
+}
+inline void wvMarkMidiSeen() { g_midiSeen.store(true); }
 
 static void wvLog(const char* fmt, ...) __attribute__((format(printf,1,2)));
 static void wvLog(const char* fmt, ...) {
@@ -285,12 +306,17 @@ static void handleUiMessage(const wchar_t* json) {
     double n = 0; parseDouble(L"\"note\"", json, &n);
     double vel = 100; parseDouble(L"\"vel\"", json, &vel);
     if (g_noteSink) g_noteSink((int)n, true);
+    g_activeNotes.insert((int)n); g_statusDirty = true; // track UI clicks in voice count
     (void) vel;
   } else if (wcsstr(json, L"\"type\":\"note.off\"")) {
     double n = 0; parseDouble(L"\"note\"", json, &n);
     if (g_noteSink) g_noteSink((int)n, false);
+    g_activeNotes.erase((int)n); g_statusDirty = true;
   } else if (wcsstr(json, L"\"type\":\"panic\"")) {
     if (g_paramSink) g_paramSink("__mbira.allNotesDamp()");
+    g_activeNotes.clear();
+    { std::lock_guard<std::mutex> lk(g_noteMutex); g_noteQueue.clear(); }
+    g_statusDirty = true;
   } else if (wcsstr(json, L"\"type\":\"ui.ready\"") || fieldContains(L"\"type\"", json, L"preset") ||
              fieldContains(L"\"type\"", json, L"instrument") || wcsstr(json, L"\"type\":\"note.state\"")) {
     // informational; ignore (no-op)
@@ -313,6 +339,9 @@ inline int runWebView2(NoteSink noteSink, ParamSink paramSink, PeakFn peakFn,
   g_paramSink = std::move(paramSink);
   g_peakFn = std::move(peakFn);
   g_wv = nullptr;
+  { std::lock_guard<std::mutex> lk(g_noteMutex); g_noteQueue.clear(); }
+  g_activeNotes.clear();
+  g_midiSeen.store(false); g_lastMidiOk = false; g_lastVoices = -1; g_statusDirty = false;
 
   // utf8 -> wide
   auto widen = [](const std::string& s, std::wstring& out) {
@@ -339,11 +368,36 @@ inline int runWebView2(NoteSink noteSink, ParamSink paramSink, PeakFn peakFn,
           , (ICoreWebView2ExecuteScriptCompletedHandler*)new ScriptHandler);
       return 0;
     }
-    if (m == WM_TIMER && wp == 2) {  // telemetry tick
+    if (m == WM_TIMER && wp == 2) {  // telemetry tick (30 Hz)
       if (g_peakFn && g_wv) {
         float L = 0, R = 0; g_peakFn(&L, &R);
         wchar_t j[160]; swprintf(j, 160, L"{\"v\":1,\"type\":\"telemetry\",\"payload\":{\"peakL\":%.3f,\"peakR\":%.3f}}", (double)L, (double)R);
         g_wv->PostWebMessageAsJson(j);
+      }
+      // Drain MIDI note queue → note.state (tine highlighting) + status.
+      if (g_wv) {
+        std::deque<WvNoteEvt> batch;
+        { std::lock_guard<std::mutex> lk(g_noteMutex); batch.swap(g_noteQueue); }
+        bool voicesChanged = false;
+        for (auto& e : batch) {
+          if (e.on) { if (!g_activeNotes.count(e.note)) { g_activeNotes.insert(e.note); voicesChanged = true; } }
+          else { if (g_activeNotes.erase(e.note) > 0) voicesChanged = true; }
+          wchar_t j[192];
+          swprintf(j, 192, L"{\"v\":1,\"type\":\"note.state\",\"payload\":{\"note\":%d,\"on\":%ls,\"velocity\":%d}}",
+                   e.note, e.on ? L"true" : L"false", e.velocity);
+          g_wv->PostWebMessageAsJson(j);
+        }
+        bool midiOk = g_midiSeen.load();
+        if (voicesChanged) g_statusDirty = true;
+        if (midiOk != g_lastMidiOk) { g_lastMidiOk = midiOk; g_statusDirty = true; }
+        int voices = (int)g_activeNotes.size();
+        if ((g_statusDirty && (midiOk || voices != 0)) || (voices != g_lastVoices && (midiOk || voices != 0))) {
+          wchar_t j[192];
+          swprintf(j, 192, L"{\"v\":1,\"type\":\"status\",\"payload\":{\"midi\":\"%ls\",\"voices\":%d}}",
+                   midiOk ? L"ok" : L"unverified", voices);
+          g_wv->PostWebMessageAsJson(j);
+          g_lastVoices = voices; g_statusDirty = false;
+        } else if (g_statusDirty && !midiOk && voices == 0) { g_statusDirty = false; }
       }
       return 0;
     }
