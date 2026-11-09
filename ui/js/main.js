@@ -69,6 +69,13 @@ on('telemetry', (p) => telemetry.push(p));
 
 /* host-driven note state (MIDI input, automation, preset audition) */
 on('note.state', ({ note, on: isOn, velocity }) => kb.setHostNote(note, isOn, velocity));
+
+/* loaded instrument schematic → rebuild the tine field from real geometry */
+const instChip = $('.provisional');
+on('instrument', (p) => {
+  if (!p || !p.id) return;
+  if (kb.setInstrument(p.id) && instChip) instChip.textContent = p.name || p.id;
+});
 on('param.state', ({ path, value }) => {
   const el = document.querySelector(`[data-param="${path}"]`);
   if (!el) return;

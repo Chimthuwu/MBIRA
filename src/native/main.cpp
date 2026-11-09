@@ -134,6 +134,7 @@ struct Engine {
 static std::vector<mbira_ui::KeyGeom> g_geom;
 static float g_canvasW = 800.0f, g_canvasH = 300.0f;
 static std::string g_instrumentName;
+static std::string g_instGeom;   // WebView2 instrument envelope (empty = not loaded)
 
 static std::string jsStringLiteral(const std::string& s) {
   std::string o = "\"";
@@ -198,6 +199,29 @@ static bool loadInstrumentFromDisk(Engine& eng) {
   catch (const choc::json::ParseError& e) { fprintf(stderr, "ERROR: bad instrument JSON: %s\n", e.what()); return false; }
   catch (const std::exception& e) { fprintf(stderr, "ERROR: bad instrument JSON geometry: %s\n", e.what()); g_geom.clear(); return false; }
   fprintf(stderr, "Instrument: %s (%d keys) from %s\n", g_instrumentName.c_str(), (int) g_geom.size(), path.c_str());
+  // Compact geometry envelope for the WebView2 UI (posted when it reports
+  // ui.ready): {v:1,type:"instrument",payload:{id,name,keys:[{note,name,rank,x,y,len}]}}
+  {
+    std::string o = "{\"v\":1,\"type\":\"instrument\",\"payload\":{\"id\":\"";
+    o += root["id"].toString(); o += "\",\"name\":\"";
+    for (char c : g_instrumentName) o += (c == '"' ? '_' : c);
+    o += "\",\"keys\":[";
+    auto keys = root["keys"];
+    for (size_t i = 0; i < keys.size(); ++i) {
+      auto k = keys[(int) i];
+      char row[160];
+      snprintf(row, sizeof row, "%s{\"note\":%lld,\"name\":\"%.8s\",\"rank\":%lld,\"x\":%.1f,\"y\":%.1f,\"len\":%.1f}",
+               i ? "," : "",
+               (long long) k["note"].get<int64_t>(),
+               k["name"].toString().c_str(),
+               (long long) k["rank"].get<int64_t>(),
+               (float) k["x"].get<double>(), (float) k["y"].get<double>(),
+               (float) k["lengthPx"].get<double>());
+      o += row;
+    }
+    o += "]}}";
+    g_instGeom = std::move(o);
+  }
   return true;
 }
 
@@ -459,6 +483,7 @@ static int runLive(Engine& eng, bool withUi, bool webviewUi, double autoQuitS) {
       std::wstring uiDirW = n ? absBuf : L"ui";
       std::string uiDir(uiDirW.begin(), uiDirW.end());
       auto peakFn = [&](float* L, float* R) { *L = g_peakL.load(); *R = g_peakR.load(); };
+      mbira_wv2::wvSetInstrument(g_instGeom);   // UI asks for it on ui.ready
       fprintf(stderr, "WebView2 UI: %s\n", uiDir.c_str());
       mbira_wv2::runWebView2(sink, paramSink, peakFn,
                              uiDir,

@@ -1,38 +1,57 @@
-import { buildTines, KEYMAP, noteName } from './layout.js';
+import { buildTines, buildKeymap, instrumentName, setInstrument, noteName } from './layout.js';
 import { send } from './bridge.js';
 
 const GLOW_DECAY = 600;
 let glowTimer = 0;
 
 export function mountKeyboard(root, board){
-  const tines = buildTines();
-  const els = [];
   const byPointer = new Map();   // pointerId → tine el
   const byKey = new Map();       // key → tine el
   const held = new Set();        // midi currently on
+  let els = [];
+  let keymap = {};
 
-  for (const t of tines){
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'tine';
-    b.dataset.midi = String(t.midi);
-    b.dataset.row = String(t.row);
-    b.setAttribute('aria-label', noteName(t.midi));
-    b.setAttribute('aria-pressed', 'false');
-    b.title = noteName(t.midi);
-    // CSSOM writes only — keeps CSP `style-src 'self'` clean
-    b.style.left = `${t.x}%`;
-    b.style.width = `${t.w}%`;
-    b.style.top = `${t.top}%`;
-    b.style.height = `${t.h}%`;
-    b.style.marginLeft = `${-t.w / 2}%`;
-    // stagger z so longer middle tines overlap cleanly
-    b.style.zIndex = String(10 + t.row);
-    root.appendChild(b);
-    els.push(b);
+  // ── (re)build the tine field for the current instrument ──
+  function build(){
+    for (const el of els) el.remove();
+    els = [];
+    const tines = buildTines();
+    keymap = buildKeymap(tines);
+    const byMidi = new Map();
+    for (const t of tines){
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `tine tine--r${t.rank}`;
+      b.dataset.midi = String(t.midi);
+      b.dataset.rank = String(t.rank);
+      b.setAttribute('aria-label', `${instrumentName()} ${t.name}`);
+      b.setAttribute('aria-pressed', 'false');
+      // CSSOM writes only — keeps CSP `style-src 'self'` clean
+      b.style.left = `${t.x}%`;
+      b.style.width = `${t.w}%`;
+      b.style.top = `${t.top}%`;
+      b.style.height = `${t.h}%`;
+      b.style.marginLeft = `${-t.w / 2}%`;
+      // front ranks draw over the rows behind them (real mbira: the short
+      // front tines sit in front of the longer ranks behind)
+      b.style.zIndex = String(10 + t.rank * 10 + Math.round(t.x));
+      const label = document.createElement('span');
+      label.className = 'tine__label';
+      label.textContent = t.name;
+      b.appendChild(label);
+      // deterministic per-tine sheen variation (same light source, slightly
+      // different polish per tine — kills the copy-pasted look)
+      b.style.setProperty('--lum', (0.15 + ((t.midi * 2654435761 >>> 0) % 100) / 100 * 0.7).toFixed(2));
+      root.appendChild(b);
+      els.push(b);
+      byMidi.set(t.midi, b);
+    }
+    return byMidi;
   }
 
-  // ── visual state ───────────────────────────────────────
+  let byMidi = build();
+
+  // ── visual state ─────────────────────────────────────────
   function paintOn(el, velocity){
     el.classList.remove('is-damped');
     el.classList.add('is-on');
@@ -62,7 +81,7 @@ export function mountKeyboard(root, board){
     glowTimer = setTimeout(() => board.style.setProperty('--gop', '0'), GLOW_DECAY);
   }
 
-  // ── note lifecycle ─────────────────────────────────────
+  // ── note lifecycle ───────────────────────────────────────
   function noteOn(el, velocity){
     const midi = +el.dataset.midi;
     if (held.has(midi)) return;
@@ -83,7 +102,7 @@ export function mountKeyboard(root, board){
 
   function allOff(){
     for (const midi of held){
-      const el = els.find((e) => +e.dataset.midi === midi);
+      const el = byMidi.get(midi);
       if (el) paintOff(el);
     }
     held.clear();
@@ -92,7 +111,7 @@ export function mountKeyboard(root, board){
     send('panic', {});
   }
 
-  // ── pointer ────────────────────────────────────────────
+  // ── pointer ──────────────────────────────────────────────
   function velocityFrom(e, el){
     const r = el.getBoundingClientRect();
     const t = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
@@ -117,13 +136,13 @@ export function mountKeyboard(root, board){
   root.addEventListener('pointerup', release);
   root.addEventListener('pointercancel', release);
 
-  // ── QWERTY ─────────────────────────────────────────────
+  // ── QWERTY ───────────────────────────────────────────────
   window.addEventListener('keydown', (e) => {
     if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === 'Escape') { allOff(); return; }
-    const idx = KEYMAP[e.key.toLowerCase()];
-    if (idx === undefined) return;
-    const el = els[idx];
+    const midi = keymap[e.key.toLowerCase()];
+    if (midi === undefined) return;
+    const el = byMidi.get(midi);
     if (!el || byKey.has(e.key)) return;
     e.preventDefault();
     byKey.set(e.key, el);
@@ -140,24 +159,21 @@ export function mountKeyboard(root, board){
   // safety: lose focus → all notes off
   window.addEventListener('blur', allOff);
 
-  // ── release only LOCALLY held notes (page switch) ─────
-  // Sends one note.off per unique locally-held tine (pointer+keyboard).
-  // Does NOT panic, does NOT touch host-driven notes. Clears pointer capture
-  // and the local maps so a later physical keyup/pointerup is a no-op.
+  // ── release only LOCALLY held notes (page switch) ────────
   function releaseLocal(){
     const seen = new Set();
-    const els = [];
+    const list = [];
     for (const pid of byPointer.keys()){
       const el = byPointer.get(pid);
       if (!el) continue;
       try { if (el.hasPointerCapture && el.hasPointerCapture(pid)) el.releasePointerCapture(pid); } catch (_) {}
-      if (!seen.has(el)) { seen.add(el); els.push(el); }
+      if (!seen.has(el)) { seen.add(el); list.push(el); }
     }
     for (const el of byKey.values()){
-      if (!seen.has(el)) { seen.add(el); els.push(el); }
+      if (!seen.has(el)) { seen.add(el); list.push(el); }
     }
     let sent = 0;
-    for (const el of els){
+    for (const el of list){
       if (noteOff(el)) sent++;
     }
     byPointer.clear();
@@ -165,12 +181,21 @@ export function mountKeyboard(root, board){
     return sent;
   }
 
-  // ── host-driven note state (MIDI in, automation) ───────
+  // ── host-driven note state (MIDI in, automation) ─────────
   return {
     els,
     releaseLocal,
+    /** Switch the rendered instrument schematic (host message). */
+    setInstrument(id){
+      if (!setInstrument(id)) return false;
+      // release anything held locally, then rebuild the field
+      allOff();
+      byMidi = build();
+      els = [...byMidi.values()];
+      return true;
+    },
     setHostNote(midi, on, velocity = 100){
-      const el = els.find((e) => +e.dataset.midi === midi);
+      const el = byMidi.get(midi);
       if (!el) return;
       if (on){ held.add(midi); paintOn(el, velocity); boardGlow(el); }
       else { held.delete(midi); paintOff(el); }

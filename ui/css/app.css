@@ -47,48 +47,123 @@ kbd{font:var(--fs-11) var(--font-num);background:var(--panel-hi);
 .nav__btn:focus-visible{outline:2px solid var(--sel);outline-offset:1px}
 
 /* ── hero (persistent keyboard) ────────────────────────── */
-.hero{position:relative;min-height:150px;padding:var(--sp-2) var(--sp-4) var(--sp-2);
+.hero{position:relative;min-height:200px;padding:var(--sp-2) var(--sp-4) var(--sp-2);
   background:linear-gradient(180deg,var(--bg-2),var(--bg-1));
   border-bottom:1px solid var(--line)}
-.provisional{position:absolute;top:var(--sp-2);right:var(--sp-4);z-index:5;
+.provisional{position:absolute;bottom:var(--sp-2);right:var(--sp-4);z-index:5;
   font-size:var(--fs-10);letter-spacing:.08em;color:var(--accent);
   background:color-mix(in srgb,var(--accent-dim) 14%,transparent);
   border:1px solid var(--accent-dim);border-radius:999px;padding:2px 8px}
-.board{position:relative;height:100%;min-height:120px;overflow:hidden;border-radius:var(--r-l);
-  border:1px solid var(--line);
-  background:radial-gradient(120% 100% at 50% 0%,var(--wood-2) 0%,var(--wood-1) 45%,var(--wood-0) 100%);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),inset 0 -24px 40px -20px #000}
-.board::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.35;
-  background-image:repeating-linear-gradient(90deg,rgba(0,0,0,.18) 0 1px,transparent 1px 7px,
-    rgba(255,255,255,.03) 7px 8px,transparent 8px 19px);mix-blend-mode:overlay}
+
+/* the board: gourd resonator seen from above — warm wood face, punched
+   soundhole, deep vignette. Layered gradients, no images (CSP-safe). */
+.board{position:relative;height:100%;min-height:170px;overflow:hidden;border-radius:var(--r-l);
+  border:1px solid #2a2018;
+  background:
+    /* warm centre light falling on the soundboard */
+    radial-gradient(90% 70% at 50% 18%,rgba(255,214,150,.14) 0%,transparent 60%),
+    /* wood body */
+    radial-gradient(120% 110% at 50% 0%,var(--wood-2) 0%,var(--wood-1) 45%,var(--wood-0) 100%);
+  box-shadow:inset 0 1px 0 rgba(255,235,200,.10),inset 0 0 60px -18px rgba(0,0,0,.55),
+    inset 0 -30px 60px -24px #000}
+/* grain: layered streaks at two scales, cut through by soft growth lines */
+.board::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background-image:
+    repeating-linear-gradient(88deg,rgba(30,18,8,.13) 0 1px,transparent 1px 5px,
+      rgba(255,240,210,.045) 5px 6px,transparent 6px 23px),
+    repeating-linear-gradient(92deg,rgba(20,12,6,.10) 0 1px,transparent 1px 47px,
+      rgba(255,230,190,.03) 47px 49px,transparent 49px 101px),
+    repeating-linear-gradient(3deg,rgba(0,0,0,.05) 0 2px,transparent 2px 26px);
+  mix-blend-mode:overlay}
+/* soundhole: drilled hole — hard dark rim, deep interior */
+.board::after{content:"";position:absolute;left:50%;bottom:7%;width:15%;height:10%;
+  translate:-50% 0;border-radius:50%;
+  background:radial-gradient(50% 46% at 50% 36%,#000 0%,#030201 50%,#0c0805 66%,transparent 74%);
+  box-shadow:
+    0 0 0 1px rgba(15,10,6,.95),
+    0 0 0 2px rgba(215,185,145,.22),      /* light catching the rim */
+    0 0 0 4px rgba(10,7,4,.55),
+    0 3px 6px rgba(0,0,0,.5),
+    inset 0 5px 8px rgba(0,0,0,.95),
+    inset 0 -3px 4px rgba(210,180,140,.18); /* lower lip highlight */
+  pointer-events:none}
 .board__glow{position:absolute;inset:0;pointer-events:none;
   background:radial-gradient(220px 160px at var(--gx,50%) var(--gy,60%),
     color-mix(in srgb,var(--accent) 30%,transparent),transparent 70%);
   opacity:var(--gop,0);transition:opacity var(--t-glow) var(--ease-out)}
-.board__bridge{position:absolute;left:6%;right:6%;top:0;height:14px;
-  background:linear-gradient(var(--wood-3),#2a1c12 60%,#120c08);
-  border-bottom:1px solid #000;border-radius:0 0 6px 6px;
-  box-shadow:0 3px 10px -4px #000}
+/* bridge: laminated hardwood bar, lit from above, casting onto the board */
+.board__bridge{position:absolute;left:4%;right:4%;top:0;height:15px;
+  background:linear-gradient(180deg,#7a5a38 0%,#5b3f26 30%,#3a2817 70%,#1d130a 100%);
+  border-bottom:1px solid #000;border-radius:0 0 7px 7px;
+  box-shadow:0 3px 10px -4px #000,0 1px 0 rgba(255,225,180,.25) inset}
+/* hold-down rail: a thin steel bar clamping every tine at its anchor,
+   drawn ABOVE the tine field so the field reads as physically mounted */
+.tines::before{content:"";position:absolute;left:3%;right:3%;top:5.5%;height:4.5%;
+  z-index:200;pointer-events:none;border-radius:3px;
+  background:linear-gradient(180deg,#c9d2dc 0%,#8b96a2 30%,#5a6470 60%,#39424c 85%,#20262d 100%);
+  box-shadow:0 3px 6px -2px rgba(0,0,0,.8),inset 0 1px 0 rgba(255,255,255,.5)}
+/* screw heads: drawn in a second layer so the shapes stay perfectly round */
+.tines::after{content:"";position:absolute;left:3%;right:3%;top:5.5%;height:4.5%;
+  z-index:201;pointer-events:none;
+  background:
+    radial-gradient(3.5px at 7px 50%,#eef3f8 0 40%,#98a3ae 55% 75%,#2e353d 100%),
+    radial-gradient(3.5px at 50% 50%,#eef3f8 0 40%,#98a3ae 55% 75%,#2e353d 100%),
+    radial-gradient(3.5px at calc(100% - 7px) 50%,#eef3f8 0 40%,#98a3ae 55% 75%,#2e353d 100%)}
+
 .tines{position:absolute;inset:0}
 
-/* tines (geometry from layout.js — CSSOM-written) */
-.tine{position:absolute;border:0;padding:0;margin:0;border-radius:3px 3px 5px 5px;
-  background:linear-gradient(180deg,var(--tine-2) 0%,var(--tine-1) 22%,var(--tine-0) 78%,#2c3036 100%);
-  box-shadow:inset 1px 0 0 rgba(255,255,255,.35),inset -1px 0 0 rgba(0,0,0,.45),0 2px 4px -1px rgba(0,0,0,.7);
+/* tines (geometry from layout.js — CSSOM-written).
+   Spring steel: bright rolled edges, a specular centre streak, grind lines,
+   darker heel where the tine wraps the bridge, polished darker tip. */
+.tine{position:absolute;border:0;padding:0;margin:0;border-radius:3px 3px 6px 6px;
+  background:
+    /* heel wrap — clamped in shadow under the rail */
+    linear-gradient(180deg,rgba(0,0,0,.75) 0%,rgba(0,0,0,.4) 5%,transparent 12%),
+    /* edge→centre steel: flat sheen, asymmetric highlight, rolled edges */
+    linear-gradient(90deg,
+      rgba(255,255,255,.42) 0%,rgba(168,176,186,.20) 16%,
+      rgba(112,120,130,.06) 34%,rgba(236,242,248,.38) 44%,
+      rgba(255,255,255,.55) 47%,rgba(210,218,226,.30) 56%,
+      rgba(104,112,122,.06) 74%,
+      rgba(160,168,178,.20) 88%,rgba(78,84,92,.42) 100%),
+    /* length shading + polished tip */
+    linear-gradient(180deg,var(--tine-2) 0%,var(--tine-1) 20%,var(--tine-0) 74%,#23262b 92%,#171a1e 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(0,0,0,.35),
+    inset 1px 0 0 rgba(255,255,255,.30),inset -1px 0 0 rgba(0,0,0,.5),
+    0 10px 14px -4px rgba(0,0,0,.7),
+    0 3px 4px -1px rgba(0,0,0,.55);
   cursor:pointer;transform:translateZ(0);
   transition:transform var(--t-up) var(--ease-out),box-shadow var(--t-up) var(--ease-out),
     filter var(--t-up) var(--ease-out);touch-action:none;-webkit-tap-highlight-color:transparent}
-.tine::before{content:"";position:absolute;left:-3px;right:-3px;top:-5px;height:7px;
-  background:linear-gradient(var(--wood-3),#1a120c);border-radius:2px}
-.tine::after{content:"";position:absolute;left:50%;bottom:9%;width:2px;height:14%;
-  translate:-50% 0;border-radius:2px;background:rgba(0,0,0,.45);opacity:.5}
+/* fine grind lines down the length (rolled steel texture) */
+.tine::before{content:"";position:absolute;inset:2px 3px 4%;pointer-events:none;border-radius:2px;
+  background:repeating-linear-gradient(0deg,rgba(255,255,255,.05) 0 1px,transparent 1px 4px,
+    rgba(0,0,0,.07) 4px 5px,transparent 5px 9px);
+  mix-blend-mode:overlay;opacity:calc(.35 + var(--lum, .5) * .4)}
+/* anchor pin where the tine is clamped under the rail */
+.tine::after{content:"";position:absolute;left:50%;top:6%;width:46%;height:10%;
+  translate:-50% 0;border-radius:3px;
+  background:linear-gradient(180deg,rgba(20,24,28,.9),rgba(60,70,80,.55));
+  box-shadow:0 1px 2px rgba(0,0,0,.6)}
+/* rank shading: front rank is closest, ranks behind recede into shadow */
+.tine--r2{filter:saturate(.92) brightness(.93)}
+.tine--r3{filter:saturate(.85) brightness(.86)}
+/* back-rank labels sit dimmer/smaller so a pair never reads as one tine */
+.tine--r3 .tine__label{opacity:.6;font-size:calc(var(--fs-10) - 1px)}
+.tine__label{position:absolute;left:50%;bottom:4%;translate:-50% 0;pointer-events:none;
+  font-size:var(--fs-10);font-weight:600;letter-spacing:.02em;line-height:1;
+  color:#e8eef6;text-shadow:0 1px 2px rgba(0,0,0,.85),0 0 4px rgba(0,0,0,.5);white-space:nowrap}
 .tine:hover{filter:brightness(1.12)}
 .tine:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
 .tine.is-on{transform:translateY(-2px) scaleY(.995);filter:brightness(1.35) saturate(1.05);
-  box-shadow:inset 1px 0 0 rgba(255,255,255,.55),inset -1px 0 0 rgba(0,0,0,.45),
+  box-shadow:
+    inset 0 0 0 1px rgba(0,0,0,.35),
+    inset 1px 0 0 rgba(255,255,255,.45),inset -1px 0 0 rgba(0,0,0,.5),
     0 0 0 1px color-mix(in srgb,var(--accent-hot) 55%,transparent),
     0 0 18px -2px var(--accent),0 0 46px -8px var(--accent);
   transition-duration:var(--t-down)}
+.tine.is-on .tine__label{color:var(--accent-hot);text-shadow:0 0 6px color-mix(in srgb,var(--accent) 60%,transparent)}
 .tine.is-damped{filter:brightness(.72) saturate(.4);transition-duration:260ms}
 
 /* ── page region ───────────────────────────────────────── */

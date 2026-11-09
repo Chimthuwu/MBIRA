@@ -56,6 +56,12 @@ inline void wvEnqueueNote(int note, bool on, int velocity) {
   std::lock_guard<std::mutex> lk(g_noteMutex);
   if (g_noteQueue.size() < 512) g_noteQueue.push_back({ note, on, velocity });
 }
+// Instrument geometry envelope (main.cpp builds it in loadInstrumentFromDisk;
+// posted to the UI once it reports ui.ready so the tine field renders the
+// actual loaded instrument).
+static std::string g_instrumentJson;
+inline void wvSetInstrument(const std::string& envelope) { g_instrumentJson = envelope; }
+
 inline void wvMarkMidiSeen() { g_midiSeen.store(true); }
 
 static void wvLog(const char* fmt, ...) __attribute__((format(printf,1,2)));
@@ -281,6 +287,9 @@ static bool fieldContains(const wchar_t* field, const wchar_t* json, const wchar
   return wcsstr(f, needle) != nullptr;
 }
 
+inline bool wvHostReady();
+inline void wvSendHost(const wchar_t* json);   // defined below (used in ui.ready)
+
 static void handleUiMessage(const wchar_t* json) {
   wchar_t sharp[240]; swprintf(sharp, 240, L"%.220ls", json);
   wvLog("[wv2 ui->host] %ls\n", sharp);
@@ -317,7 +326,18 @@ static void handleUiMessage(const wchar_t* json) {
     g_activeNotes.clear();
     { std::lock_guard<std::mutex> lk(g_noteMutex); g_noteQueue.clear(); }
     g_statusDirty = true;
-  } else if (wcsstr(json, L"\"type\":\"ui.ready\"") || fieldContains(L"\"type\"", json, L"preset") ||
+  } else if (wcsstr(json, L"\"type\":\"ui.ready\"")) {
+    // UI is up: give it the loaded instrument so the tine field matches.
+    if (!g_instrumentJson.empty()) {
+      int n = MultiByteToWideChar(CP_UTF8, 0, g_instrumentJson.c_str(), -1, nullptr, 0);
+      if (n > 0) {
+        std::wstring w((size_t) n, L'\0');
+        MultiByteToWideChar(CP_UTF8, 0, g_instrumentJson.c_str(), -1, &w[0], n);
+        wvLog("[wv2] posting instrument to UI\n");
+        wvSendHost(w.c_str());
+      }
+    }
+  } else if (fieldContains(L"\"type\"", json, L"preset") ||
              fieldContains(L"\"type\"", json, L"instrument") || wcsstr(json, L"\"type\":\"note.state\"")) {
     // informational; ignore (no-op)
   }
