@@ -63,8 +63,11 @@ ui/
   steel + amber), not a verdict. Design agents should treat `tokens.css` as
   the swap point — every color and duration in `app.css` reads from it.
 - **Effects UI depth.** The rack is chips only; per-effect panels are M2/M3.
-- **Preset browser.** The `<select>` is a stub; a real browser needs the
-  `preset.*` messages plus a list endpoint from the host.
+- **Preset browser / storage backend.** Presets work (`js/presets.js`): a named
+  snapshot of every wired control, saved in `localStorage` under
+  `mbira.presets.v1` (WebView2 user data, so it survives restarts) and recalled
+  as a batch of `param.set`. What is still open is the §5.4 backend: preset
+  files on disk, a versioned plugin-state round-trip, and block-atomic recall.
 - **Per-note tuning grid.** §4 calls for it; not mocked — it depends on the
   tuning question above.
 

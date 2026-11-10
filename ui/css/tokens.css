@@ -23,6 +23,11 @@
      legible against every surface, visually distinct from energy. */
   --sel:#aeb9c4; --sel-dim:#5c6773;
 
+  /* modulation sources — per-parameter strips (Velocity / Key / Random).
+     These are NOT status colours: they only label a strip and its fill. */
+  --mod-vel:#f0a63c; --mod-key:#5fb3c8; --mod-rnd:#a487d8;
+  --mod-lfo:#7fd49b;
+
   /* status */
   --ok:#67b86e; --warn:#e0a33a; --err:#d9534f;
 

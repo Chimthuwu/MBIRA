@@ -1,7 +1,11 @@
 import { send } from './bridge.js';
 
 /* ── faders ──────────────────────────────────────────────── */
+// Every mount* returns a Map<param path, {get, set}> so a preset can read and
+// write every control from the outside: the value lives in a closure, so there
+// is no way to get or set it through the DOM alone.
 export function mountFaders(root){
+  const setters = new Map();
   root.querySelectorAll('.fader').forEach((f) => {
     const input = f.querySelector('.range');
     const out = f.querySelector('.fader__val');
@@ -26,11 +30,14 @@ export function mountFaders(root){
     });
     input.addEventListener('change', () => { clearTimeout(timer); timer = 0; flush(); });
     paint();
+    setters.set(param, { get: () => +input.value, set: (v) => { input.value = String(v); paint(); flush(); } });
   });
+  return setters;
 }
 
 /* ── knobs ───────────────────────────────────────────────── */
 export function mountKnobs(root){
+  const setters = new Map();
   root.querySelectorAll('.knob').forEach((k) => {
     const dial = k.querySelector('.knob__dial');
     const min = +k.dataset.min, max = +k.dataset.max;
@@ -45,7 +52,17 @@ export function mountKnobs(root){
     };
 
     const dyn = k.querySelector('.knob__val--dyn');
-    const commit = () => send('param.set', { path: k.dataset.param, value: val });
+    // Dragging sends throttled like the faders (~40 ms), so the sound follows
+    // the knob instead of only changing when it is released. Final value is
+    // flushed on pointerup.
+    let lastSent = -1e9, timer = 0;
+    const sendNow = () => { lastSent = performance.now(); send('param.set', { path: k.dataset.param, value: val }); };
+    const queueSend = () => {
+      const now = performance.now();
+      if (now - lastSent >= 40){ clearTimeout(timer); timer = 0; sendNow(); }
+      else if (!timer){ timer = setTimeout(() => { timer = 0; sendNow(); }, 40 - (now - lastSent)); }
+    };
+    const commit = () => { clearTimeout(timer); timer = 0; sendNow(); };
     const refreshRead = () => { const nn = (val - min) / (max - min); if (dyn) dyn.textContent = `${Math.round(nn * 100)}%`; };
 
     dial.addEventListener('pointerdown', (e) => {
@@ -56,6 +73,7 @@ export function mountKnobs(root){
         const dy = y0 - ev.clientY;           // up = increase
         val = Math.min(max, Math.max(min, v0 + (dy / 140) * (max - min)));
         paint();
+        queueSend();
       };
       const up = () => {
         dial.removeEventListener('pointermove', move);
@@ -81,98 +99,130 @@ export function mountKnobs(root){
 
     dial.addEventListener('dblclick', () => { val = (min + max) / 2; paint(); commit(); });
     paint();
+    setters.set(k.dataset.param, { get: () => val, set: (v) => { val = Math.min(max, Math.max(min, v)); paint(); commit(); } });
   });
+  return setters;
 }
 
-/* ── engine blend slider (Physical <-> Samples; param.set) ── */
-export function mountBlend(root){
-  const b = root.querySelector('[data-blend]');
-  if (!b) return;
-  const track = b.querySelector('.blend__track');
-  const min = +track.getAttribute('aria-valuemin');
-  const max = +track.getAttribute('aria-valuemax');
-  let now = +track.getAttribute('aria-valuenow');
-
-  const paint = () => {
-    const s = `${now}%`;
-    b.style.setProperty('--bpos', s);
-    track.querySelector('.blend__read').textContent = String(Math.round(now));
-    track.setAttribute('aria-valuenow', String(Math.round(now)));
-    track.setAttribute('aria-valuetext',
-      now >= 100 ? '100% physical model' : (now <= 0 ? '100% body samples' : `${Math.round(now)}% physical, ${100 - Math.round(now)}% samples`));
-  };
-  const commit = () => send('param.set', { path: 'blend.engine', value: now / 100 });
-
-  const set = (v) => { now = Math.min(max, Math.max(min, v)); paint(); };
-
-  track.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    try { track.setPointerCapture(e.pointerId); } catch (_) {}
-    const r = track.getBoundingClientRect();
-    set(((e.clientX - r.left) / r.width) * max);
-    const move = (ev) => set(((ev.clientX - r.left) / r.width) * max);
-    const up = () => {
-      track.removeEventListener('pointermove', move);
-      track.removeEventListener('pointerup', up);
-      commit();
-    };
-    track.addEventListener('pointermove', move);
-    track.addEventListener('pointerup', up);
-  });
-  track.addEventListener('keydown', (e) => {
-    const step = 1;
-    if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { set(now + step); commit(); }
-    else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { set(now - step); commit(); }
-    else if (e.key === 'Home') { set(min); commit(); }
-    else if (e.key === 'End') { set(max); commit(); }
-    else return;
-    e.preventDefault();
-  });
-  paint();
-}
-
-/* ── meter + scope (telemetry-driven; mock when offline) ─── */
-export function mountTelemetry(meterEl, canvas, isScopeVisible = () => true){
-  const ctx = canvas.getContext('2d', { alpha: true });
-  let l = 0, r = 0, phase = 0, amp = 0;
-  let raf = 0;
-
+/* ── output meter (telemetry-driven; mock when offline) ─── */
+export function mountMeter(meterEl){
   const fills = meterEl.querySelectorAll('.meter__fill');
-
   function push(payload){
-    // payload: { peakL, peakR, rms?, wave?: Float32Array }
-    l = payload.peakL ?? l;
-    r = payload.peakR ?? r;
-    amp = Math.max(amp, payload.rms ?? 0);
-    fills[0].style.height = `${Math.min(100, l * 100).toFixed(1)}%`;
-    fills[1].style.height = `${Math.min(100, r * 100).toFixed(1)}%`;
+    if (payload.peakL !== undefined) fills[0].style.height = `${Math.min(100, payload.peakL * 100).toFixed(1)}%`;
+    if (payload.peakR !== undefined) fills[1].style.height = `${Math.min(100, payload.peakR * 100).toFixed(1)}%`;
   }
-
-  function frame(){
-    raf = requestAnimationFrame(frame);
-    if (document.visibilityState !== 'visible') return;
-    // scope only draws on the Tine page; otherwise pause in place so the
-    // waveform phase survives page switches (Play → Tine → Play).
-    if (!isScopeVisible()) return;
-
-    // decay
-    amp *= 0.985;
-    phase += 0.09;
-
-    const w = canvas.width, h = canvas.height, mid = h / 2;
-    ctx.clearRect(0, 0, w, h);
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(240,166,60,.85)';
-    ctx.beginPath();
-    for (let x = 0; x <= w; x += 3){
-      const t = x / w;
-      const y = mid + Math.sin(t * Math.PI * 14 + phase) *
-                      Math.sin(t * Math.PI) * (mid - 6) * (0.25 + amp);
-      x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-  }
-
-  frame();
   return { push };
+}
+
+/* ── mod strips (Pigments-style, one per source, per knob) ───
+   The locked identity has no mod matrix and no Mod page: every knob carries
+   its own strips. Velocity / Key / Random are per-note, so a depth is a real
+   offset applied when the note is struck (the DSP latches it in noteOn()). LFO
+   is different: it is a free-running oscillator summed into the parameter as a
+   signal, so it keeps modulating while the note rings. It is therefore only
+   offered on the targets that can move continuously (Geometry, Material,
+   Decay); a knob lists its sources in data-sources. */
+const MOD_SOURCES = [
+  { id: 'vel', label: 'Velocity' },
+  { id: 'key', label: 'Key' },
+  { id: 'rnd', label: 'Random' },
+  { id: 'lfo', label: 'LFO' },
+];
+const DEFAULT_SOURCES = ['vel', 'key', 'rnd'];
+
+export function mountModStrips(root){
+  const setters = new Map();
+  root.querySelectorAll('.knob[data-mod]').forEach((knob) => {
+    const host = knob.querySelector('.mods');
+    if (!host) return;
+    const target = knob.dataset.mod;
+    const allowed = (knob.dataset.sources || DEFAULT_SOURCES.join(',')).split(',').map((s) => s.trim());
+    const knobLabel = knob.querySelector('.knob__label')?.textContent?.trim() || target;
+    const strips = [];
+
+    const refreshKnob = () => {
+      knob.classList.toggle('has-mod', strips.some((s) => s.depth !== 0));
+    };
+
+    for (const src of MOD_SOURCES) {
+      if (!allowed.includes(src.id)) continue;
+      const param = `mod.${target}.${src.id}`;
+      const strip = document.createElement('div');
+      strip.className = `mod mod--${src.id}`;
+      strip.tabIndex = 0;
+      strip.dataset.param = param;
+      strip.dataset.source = src.id;
+      strip.setAttribute('role', 'slider');
+      strip.setAttribute('aria-valuemin', '-100');
+      strip.setAttribute('aria-valuemax', '100');
+      strip.setAttribute('aria-label', `${src.label} → ${knobLabel}`);
+      strip.innerHTML = '<i class="mod__fill"></i><i class="mod__cap"></i>';
+      host.appendChild(strip);
+
+      const fill = strip.querySelector('.mod__fill');
+      const cap = strip.querySelector('.mod__cap');
+      let depth = 0;
+      let lastSent = -1e9, timer = 0;
+
+      const sendNow = () => {
+        lastSent = performance.now();
+        send('param.set', { path: param, value: depth });
+      };
+      const commit = () => { clearTimeout(timer); timer = 0; sendNow(); };
+      const queueSend = () => {
+        const now = performance.now();
+        if (now - lastSent >= 40){ clearTimeout(timer); timer = 0; sendNow(); }
+        else if (!timer){ timer = setTimeout(() => { timer = 0; sendNow(); }, 40 - (now - lastSent)); }
+      };
+
+      const paint = () => {
+        const half = Math.abs(depth) * 50;         // % of the strip height
+        fill.style.height = `${half}%`;
+        fill.style.top = depth >= 0 ? `${50 - half}%` : '50%';
+        cap.style.top = depth >= 0 ? `${50 - half}%` : `${50 + half}%`;
+        strip.style.setProperty('--d', depth.toFixed(2));
+        strip.setAttribute('aria-valuenow', String(Math.round(depth * 100)));
+        strip.setAttribute('aria-valuetext', `${depth > 0 ? '+' : ''}${Math.round(depth * 100)}%`);
+        strip.classList.toggle('is-on', depth !== 0);
+        strip.title = `${src.label} → ${knobLabel}: ${depth > 0 ? '+' : ''}${Math.round(depth * 100)}%`;
+        refreshKnob();
+      };
+
+      strip.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        try { strip.setPointerCapture(e.pointerId); } catch (_) {}
+        const y0 = e.clientY, d0 = depth;
+        const move = (ev) => {
+          depth = Math.max(-1, Math.min(1, d0 + (y0 - ev.clientY) / 90));
+          paint(); queueSend();
+        };
+        const up = () => {
+          strip.removeEventListener('pointermove', move);
+          strip.removeEventListener('pointerup', up);
+          strip.removeEventListener('pointercancel', up);
+          commit();
+        };
+        strip.addEventListener('pointermove', move);
+        strip.addEventListener('pointerup', up);
+        strip.addEventListener('pointercancel', up);
+      });
+
+      strip.addEventListener('keydown', (e) => {
+        const step = 0.05;
+        if (e.key === 'ArrowUp' || e.key === 'ArrowRight') depth = Math.min(1, depth + step);
+        else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') depth = Math.max(-1, depth - step);
+        else if (e.key === 'Home') depth = 0;
+        else if (e.key === 'End') depth = 1;
+        else return;
+        e.preventDefault();
+        paint(); commit();
+      });
+
+      strip.addEventListener('dblclick', () => { depth = 0; paint(); commit(); });
+      paint();
+      strips.push({ get depth(){ return depth; } });
+      setters.set(param, { get: () => depth, set: (v) => { depth = Math.max(-1, Math.min(1, v)); paint(); commit(); } });
+    }
+  });
+  return setters;
 }
