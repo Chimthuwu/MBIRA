@@ -1,5 +1,12 @@
 # MBIRA todo.md
 
+## 2026-11-11 — shipped 2026-11-10 WIP + §5.4 preset files
+
+- [x] **Committed the whole 2026-11-10 session** (was sitting uncommitted on `ui/visual-first-assignment`): 5 logical commits — DSP 6-partial modal engine, native scope tap + allowlist, single Play-page UI + mod strips + presets + visualizer, 20-case regression gate, docs/evidence. Verified before commit: `npm test` green (20 real-bundle renders match reference manifest; L-1 spread 0.16 dB, L-2 +10.6 dB, L-4 stereo 0.34) and native build compiles clean (GCC 16.2.0, ninja). Pushed to `Chimthuwu/MBIRA` via the Chimthuwu token. Commits `6d61c0d`..`11d4dcf`.
+- [x] **§5.4 preset files on disk (partial):** versioned on-disk format (v1) — single-preset `{v,name,params}` and bank `{v,type:'bank',presets,last}` files with strict validation (unknown v rejected, non-numeric params dropped, all-invalid rejected). Export/Import buttons in the top bar: Export downloads the current 32-value patch as `.mbirapreset` JSON; Import parses single/bank, merges by name, recalls. Pure serialize/parse covered by `tests/presets/roundtrip.mjs` (now in `npm test`). Commit `7026d2a`.
+- [ ] **§5.4 still open:** block-atomic recall (sample-boundary swap instead of per-param ramp), instrument + `voices.max` persistence, and the native plugin-state round-trip.
+- [ ] **Still human-gated (no change):** relaunch `mbira-poc live` and ear-confirm P1 master taper / L-4 stereo / modal.* / brightness / presets by ear; fill `docs/manual-test-results.md` Parts A–D.
+
 ## Environment report (2026-11-06)
 
 - OS: Windows 10 Pro 22H2, build 19045.7807. CPU: AMD Ryzen 5 3600 (6c/12t). RAM: 32 GB.
@@ -354,9 +361,8 @@ It is now the seed of §5.4, scoped to what can actually round-trip today.
       0.5, LFO 2.5 Hz; full page reload → same values restored and 56 `param.set`
       messages reached the host; no console errors, no top-bar overlap or
       overflow at 741 / 996 / 1400 px.
-- [ ] Still §5.4 work: preset files on disk, versioned plugin-state round-trip,
-      instrument + `voices.max` persistence, and block-atomic recall (today a
-      recall is a batch of 32 ramping `param.set`s).
+- [x] **§5.4 preset files on disk + versioned round-trip DONE (2026-11-11):** export/import `.mbirapreset` (single) and bank JSON with v1 schema validation; covered by `tests/presets/roundtrip.mjs`.
+- [ ] **§5.4 still open:** block-atomic recall (sample-boundary swap vs per-param ramp), instrument + `voices.max` persistence, native plugin-state round-trip.
 
 ## 2026-11-10 (later still) — the Play page fits the default window; brightness now does something
 
