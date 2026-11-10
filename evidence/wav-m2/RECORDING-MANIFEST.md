@@ -79,12 +79,8 @@ Re-render any verified row, e.g.:
   — the render does not normalise), but the signal reached full scale. Same for
   `inst-nyunga.wav` at −2.20 dB (inside target).
 - **N-5 — no stereo image anywhere.** Left = right in all 17 files.
-- **N-6 — `MBIRA_INSTRUMENT` with a bad path crashes the host.** While
-  reconstructing provenance, `MBIRA_INSTRUMENT=src/instruments/__none__.json`
-  aborted with `terminate called after throwing an instance of 'choc::file::Error'
-  : Failed to read from file …` instead of the intended fallback in
-  `src/native/main.cpp:157-163` ("instrument JSON not found … using default
-  64-note pool"), because `choc::file::loadFileAsString` throws and the
-  surrounding `catch` only handles `choc::json::ParseError`. **Not fixed** —
-  Milestone L permits only listening-driven fixes; recorded for the next fix
-  pass.
+- **N-6 — `MBIRA_INSTRUMENT` with a bad path crashes the host.** Fixed at
+  `cea9d24`: the loader catches `choc::file::Error` as well as
+  `choc::json::ParseError`, prints a `NOTE:` and falls back to the default
+  64-note pool, and malformed JSON is rejected before clearing the current
+  instrument. (Originally observed with `MBIRA_INSTRUMENT=src/instruments/__none__.json`.)

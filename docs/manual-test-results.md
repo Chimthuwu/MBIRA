@@ -4,10 +4,10 @@
 requires (`docs/MBIRA-SPEC.md` §8). Fill it in by listening. An agent cannot
 hear — every row below is empty on purpose.**
 
-- Pack: `evidence/wav-listen/` (13 files) + `evidence/wav-listen/RECORDING-MANIFEST.md`
-- Rendered from: HEAD `6293c17`, branch `ui/visual-first-assignment`, 2026-11-08
+- Pack: `evidence/wav-listen/` (13 files, re-render 3) + `evidence/wav-listen/RECORDING-MANIFEST.md`
+- Rendered 2026-11-10 from the current working tree (post-P1 master-fader fix + P2 UI honesty pass). Each file's SHA-256 and the `build/dsp-bundle.js` anchor are in the manifest; `npm test` re-verifies 7 canonical cases through the real native path.
 - M1 baseline (older, different sound): tag `m1-baseline` = commit `efb427a`
-- Audio: 48 kHz / 16-bit / block 256 / no normalisation / mono content in both channels
+- Audio: 48 kHz / 16-bit / block 256 / no normalisation. L/R were bit-identical in re-render 3 (mono bus mirrored); check the manifest for the current state.
 - Reference: an actual mbira dzaVadzimu and Nyunga Nyunga if one is available
 
 ## Part A — does it sound like an instrument at all? (human, ~5 min)
@@ -30,23 +30,23 @@ Play in this order, one at a time: `dz-soft` → `dz-hard` → `dz-phrase`.
 | B1 | Are the intervals right? (Placeholder: both instruments are equal-tempered C major — `provisional: true`. Amendment 4.9 asked for real tunings.) | |
 | B2 | DzaVadzimu vs Nyunga: is `ny-hard` audibly a different instrument from `dz-hard`, or just the same note slightly longer/shorter? | |
 | B3 | Is the key range plausible? dzaVadzimu = 24 keys, MIDI 48–88; Nyunga = 15 keys, MIDI 60–84 | |
-| B4 | Does the buzz/deze sound like the real instrument? Compare `ab-buzz-off` vs `ab-buzz-on` | |
-| B5 | Does the gourd add anything? `ab-gourd-off` vs `ab-gourd-on` (measured difference is only +0.32 dB below 400 Hz) | |
+| B4 | Does the buzz/deze sound like the real instrument? Compare `ab-buzz-off` vs `ab-buzz-on` (buzz now ships on at the spec default 0.2 — L-2 fixed; measures +7.5 dB in 2–8 kHz) | |
+| B5 | Does the gourd add anything? `ab-gourd-off` vs `ab-gourd-on` (measured difference is +1.1 dB in 60–400 Hz in re-render 3) | |
 | B6 | What does the player say is *most* wrong? | |
 
-## Part C — pluck position (objective defect, confirm audibly)
+## Part C — pluck position (L-1 fixed; confirm audibly)
 
 | # | Question | Answer |
 |---|---|---|
-| C1 | `pluck-0.0-end` vs `pluck-0.5-centre`: does it sound like a 20 dB drop? | |
-| C2 | `pluck-0.0-end` vs `pluck-1.0-otherend`: can you hear any difference? (They are byte-identical — defect L-1 in the manifest) | |
+| C1 | `pluck-0.0` vs `pluck-0.5` vs `pluck-1.0`: do the three positions stay roughly level-matched (L-1 fixed — RMS spread 0.08 dB in re-render 3) while the timbre changes? | |
+| C2 | `pluck-0.0` vs `pluck-1.0`: can you hear any timbral difference? (L-1 fixed: endpoints are different renders with a mode-2 sign flip, no longer byte-identical. Near the endpoints the weighting floors still flatten the timbre — true end-pluck physics needs cantilever mode shapes φᵢ(x).) | |
 
 ## Part D — open questions carried from M1 (never answered)
 
 | # | Question | Answer |
 |---|---|---|
 | D1 | Amendment 4.9: real tunings for both instruments (note names or Hz). Can the player provide them? | |
-| D2 | Should buzz ship on (spec default `buzz.intensity = 0.2`) or off (shipped JSON `0.0`)? Defect L-2. | |
+| D2 | ~~Should buzz ship on (spec default 0.2) or off?~~ **Resolved 2026-11-09 (L-2):** buzz ships on at 0.2 in `cfg` and both instrument JSONs. | ships on (resolved) |
 | D3 | Acceptance for this pack: is HEAD good enough to keep building sound, or must the tine model be reworked first? | |
 
 ## Result
@@ -80,3 +80,9 @@ Play in this order, one at a time: `dz-soft` → `dz-hard` → `dz-phrase`.
 - Parts A–D above are still unanswered. This session was live playing, not the `evidence/wav-listen/` A/B pack.
 - Visual redesign (real 24-key dzaVadzimu geometry from `src/instruments/mbira-dzavadzimu.json`, amendment 4.9) is deferred; the UI still uses the placeholder 21-tine grid.
 - Provisional controls (`blend/fx/layer/mode`) await the M3 sample engine; `macro.buzz` awaits a player decision on defect L-2.
+
+### Post-session fixes (2026-11-10, needs ear/eye check on relaunch)
+
+- **P1 fixed:** master is post-limiter with a loudness-tracking fader (default unity). It should no longer pin/squash above ~30% (offline: −37.6 → −4.8 dBFS peak across the travel). Rebuild/relaunch `mbira-poc` to hear it.
+- **P2 fixed (UI honesty):** the unwired FX/mode/blend/layer controls are removed or disabled; the 3 macros + master are the wired webview controls. `macro.buzz` now has effect because L-2 is fixed (buzz ships at 0.2).
+- **L-2 fixed:** buzz ships on at the spec default 0.2 in `cfg` and both instrument JSONs.
