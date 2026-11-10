@@ -372,6 +372,19 @@ static void runRender(Engine& eng, const std::string& wavPath,
 static std::atomic<unsigned> g_xruns { 0 }; // RtAudio under/overflow flags
 static std::atomic<float> g_peakL { 0.0f }, g_peakR { 0.0f }; // last-block meter peaks
 
+// Scope ring: the audio thread appends the mono bus here (lock-free, no
+// allocation); the UI thread copies the newest window on its 30 Hz tick.
+static constexpr unsigned kScopeN = 4096;         // power of two
+static float g_scope[kScopeN] = { 0.0f };
+static std::atomic<unsigned> g_scopeW { 0 };      // total samples written (monotonic)
+
+static int readScopeWave(float* dst, int maxN) {
+  int n = maxN < (int)(kScopeN / 2) ? maxN : (int)(kScopeN / 2);
+  unsigned w = g_scopeW.load(std::memory_order_acquire);
+  for (int i = 0; i < n; ++i) dst[i] = g_scope[(w - (unsigned) n + (unsigned) i) & (kScopeN - 1)];
+  return n;
+}
+
 static int runLive(Engine& eng, bool withUi, bool webviewUi, double autoQuitS) {
   RtAudio dac;
   if (dac.getDeviceCount() < 1) { fprintf(stderr, "ERROR: no audio devices found\n"); return 1; }
@@ -400,6 +413,10 @@ static int runLive(Engine& eng, bool withUi, bool webviewUi, double autoQuitS) {
       if (R[i] > pr || -R[i] > pr) pr = (R[i] > 0 ? R[i] : -R[i]);
     }
     g_peakL.store(pl); g_peakR.store(pr);
+    unsigned w = g_scopeW.load(std::memory_order_relaxed);
+    for (size_t i = 0; i < nFrames; ++i)
+      g_scope[(w + (unsigned) i) & (kScopeN - 1)] = 0.5f * (L[i] + R[i]);
+    g_scopeW.store(w + (unsigned) nFrames, std::memory_order_release);
     return 0;
   };
 
@@ -483,9 +500,10 @@ static int runLive(Engine& eng, bool withUi, bool webviewUi, double autoQuitS) {
       std::wstring uiDirW = n ? absBuf : L"ui";
       std::string uiDir(uiDirW.begin(), uiDirW.end());
       auto peakFn = [&](float* L, float* R) { *L = g_peakL.load(); *R = g_peakR.load(); };
+      auto waveFn = [&](float* dst, int maxN) { return readScopeWave(dst, maxN); };
       mbira_wv2::wvSetInstrument(g_instGeom);   // UI asks for it on ui.ready
       fprintf(stderr, "WebView2 UI: %s\n", uiDir.c_str());
-      mbira_wv2::runWebView2(sink, paramSink, peakFn,
+      mbira_wv2::runWebView2(sink, paramSink, peakFn, waveFn, eng.sampleRate,
                              uiDir,
                              std::string("Z:/GITHUB/MBIRA/build/wv2-userdata"),
                              std::string("Z:/GITHUB/MBIRA/build/liveui.log"),

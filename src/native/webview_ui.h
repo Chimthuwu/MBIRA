@@ -8,7 +8,8 @@
 //     injected sinks. Sinks are the same bounded-queue lambdas the GDI UI used,
 //     so the JS renderer always runs on the service thread, never here.
 //   - WM_TIMER (UI thread): pushes telemetry host->ui at ~30 Hz.
-//   - audio thread: only writes peak atomics (never touches the webview).
+//   - audio thread: only writes peak atomics + a scope ring (never touches the
+//     webview).
 #pragma once
 #include <windows.h>
 #include <WebView2.h>
@@ -28,6 +29,9 @@ namespace mbira_wv2 {
 using NoteSink  = std::function<void(int note, bool on)>;
 using ParamSink = std::function<void(const std::string& jsExpr)>;
 using PeakFn    = std::function<void(float* peakL, float* peakR)>;
+// Copies the most recent `maxN` mono bus samples in time order and returns how
+// many it wrote. Backed by a lock-free ring in the audio thread (main.cpp).
+using WaveFn    = std::function<int(float* dst, int maxN)>;
 
 static ICoreWebView2*        g_wv = nullptr;
 static ICoreWebView2Controller* g_ctl = nullptr;  // MUST be held: releasing it closes the WebView
@@ -37,6 +41,8 @@ static EventRegistrationToken g_navToken{};
 static NoteSink   g_noteSink;
 static ParamSink  g_paramSink;
 static PeakFn     g_peakFn;
+static WaveFn     g_waveFn;
+static double     g_sampleRate = 48000.0;   // for the UI's spectrum / spectrogram axes
 static FILE*      g_log = nullptr;
 
 // MIDI → UI forwarding (host drives UI highlighting). MIDI callback runs on
@@ -276,7 +282,18 @@ static bool dspAccepts(const std::wstring& p) {
     L"gourdFreq", L"buzzIntensity", L"buzzChar", L"adsr.attack", L"adsr.release",
     L"adsr.sustain", L"lfo.rate", L"mod.lfoToMaster", L"mod.lfoToPitch",
     L"random.amount", L"vel.amp", L"vel.bright", L"macro.resonance",
-    L"macro.buzz", L"macro.brightness" };
+    L"macro.buzz", L"macro.brightness", L"modal.geometry", L"modal.material",
+    L"modal.decay", L"exciter.noise", L"exciter.hardness",
+    // per-parameter mod strips (per-note sources x physical targets)
+    L"mod.geometry.vel", L"mod.geometry.key", L"mod.geometry.rnd",
+    L"mod.material.vel", L"mod.material.key", L"mod.material.rnd",
+    L"mod.decay.vel", L"mod.decay.key", L"mod.decay.rnd",
+    L"mod.pluck.vel", L"mod.pluck.key", L"mod.pluck.rnd",
+    L"mod.noise.vel", L"mod.noise.key", L"mod.noise.rnd",
+    L"mod.hardness.vel", L"mod.hardness.key", L"mod.hardness.rnd",
+    // free-running LFO strips (continuous targets only: pluck/noise/tone exist
+    // only at note-on, so they have no LFO)
+    L"mod.geometry.lfo", L"mod.material.lfo", L"mod.decay.lfo" };
   for (const wchar_t* s : k) if (p == s) return true;
   return false;
 }
@@ -349,7 +366,8 @@ inline void wvSendHost(const wchar_t* json) { if (g_wv) g_wv->PostWebMessageAsJs
 
 // Main entry: blocks on the message loop until the window closes. Mirrors
 // mbira_ui::run(). uiDir passed as UTF-8; converted to wide internally.
-inline int runWebView2(NoteSink noteSink, ParamSink paramSink, PeakFn peakFn,
+inline int runWebView2(NoteSink noteSink, ParamSink paramSink, PeakFn peakFn, WaveFn waveFn,
+                       double sampleRate,
                        const std::string& uiDirUtf8, const std::string& userDataUtf8,
                        const std::string& logPathUtf8, bool enableCdp = false) {
   if (g_log) fclose(g_log);
@@ -358,6 +376,8 @@ inline int runWebView2(NoteSink noteSink, ParamSink paramSink, PeakFn peakFn,
   g_noteSink = std::move(noteSink);
   g_paramSink = std::move(paramSink);
   g_peakFn = std::move(peakFn);
+  g_waveFn = std::move(waveFn);
+  g_sampleRate = sampleRate > 1000.0 ? sampleRate : 48000.0;
   g_wv = nullptr;
   { std::lock_guard<std::mutex> lk(g_noteMutex); g_noteQueue.clear(); }
   g_activeNotes.clear();
@@ -391,8 +411,23 @@ inline int runWebView2(NoteSink noteSink, ParamSink paramSink, PeakFn peakFn,
     if (m == WM_TIMER && wp == 2) {  // telemetry tick (30 Hz)
       if (g_peakFn && g_wv) {
         float L = 0, R = 0; g_peakFn(&L, &R);
-        wchar_t j[160]; swprintf(j, 160, L"{\"v\":1,\"type\":\"telemetry\",\"payload\":{\"peakL\":%.3f,\"peakR\":%.3f}}", (double)L, (double)R);
-        g_wv->PostWebMessageAsJson(j);
+        // 1024 samples of the mono bus => ~21 ms at 48 kHz: one scope sweep,
+        // and enough for a 1024-point FFT (46.9 Hz bins) in the UI.
+        static float wave[1024];
+        int wn = g_waveFn ? g_waveFn(wave, 1024) : 0;
+        wchar_t head[192];
+        swprintf(head, 192, L"{\"v\":1,\"type\":\"telemetry\",\"payload\":{\"peakL\":%.3f,\"peakR\":%.3f,\"sr\":%.0f,\"wave\":[",
+                 (double)L, (double)R, g_sampleRate);
+        std::wstring j(head);
+        j.reserve(160 + (size_t)wn * 5);
+        for (int i = 0; i < wn; ++i) {
+          int q = (int)(wave[i] * 127.0f);
+          if (q > 127) q = 127; if (q < -127) q = -127;
+          wchar_t item[8]; swprintf(item, 8, i ? L",%d" : L"%d", q);
+          j += item;
+        }
+        j += L"]}}";
+        g_wv->PostWebMessageAsJson(j.c_str());
       }
       // Drain MIDI note queue → note.state (tine highlighting) + status.
       if (g_wv) {

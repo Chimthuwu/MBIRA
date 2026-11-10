@@ -125,7 +125,7 @@ inline void buildPanel(HWND h, Ctx* c, int W, int H) {
   mkLabel(h, "Pluck position", 14, py + 6, 120);
   mkTrack(h, ID_TR_PLUCK, 14, py + 24, 150, 0, 100, 30);
   mkLabel(h, "Master", 14, py + 64, 120);
-  mkTrack(h, ID_TR_MASTER, 14, py + 82, 150, 0, 100, 40);
+  mkTrack(h, ID_TR_MASTER, 14, py + 82, 150, 0, 100, 100);
   // soundboard (the shared resonator bank)
   mkLabel(h, "SOUNDBOARD (resonator)", 200, py + 6, 180);
   mkCheck(h, ID_CB_SB, "Enable", 200, py + 22, 1);
@@ -209,7 +209,7 @@ inline LRESULT CALLBACK proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
       int pos = (int) SendMessageA(src, TBM_GETPOS, 0, 0);
       switch (id) {
         case ID_TR_PLUCK:  sendParam(h, c, "pluckPos", pos / 100.0); break;
-        case ID_TR_MASTER: sendParam(h, c, "master", 0.05 + 0.40 * pos / 100.0); break;
+        case ID_TR_MASTER: sendParam(h, c, "master", pos / 100.0); break;
         case ID_TR_SB:     c->lastSb = pos; sendParam(h, c, "soundboard", pos / 100.0); break;
         case ID_TR_GOURD:  c->lastGourd = pos; sendParam(h, c, "gourdAmount", pos / 100.0); break;
         case ID_TR_GOURDF: sendParam(h, c, "gourdFreq", (double) pos); break;
