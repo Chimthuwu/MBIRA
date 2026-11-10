@@ -1,0 +1,8 @@
+{"events":[
+ {"t":0.1,"type":"param","name":"mod.decay.vel","value":0.0},
+ {"t":0.2,"type":"on","note":60,"vel":100},
+ {"t":2.6,"type":"off","note":60},
+ {"t":2.9,"type":"param","name":"mod.decay.vel","value":1.0},
+ {"t":3.0,"type":"on","note":60,"vel":100},
+ {"t":6.0,"type":"off","note":60}
+]}

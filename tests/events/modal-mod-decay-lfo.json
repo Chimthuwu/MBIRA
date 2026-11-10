@@ -1,0 +1,5 @@
+{"events":[
+ {"t":0.1,"type":"param","name":"lfo.rate","value":1.5},
+ {"t":0.1,"type":"param","name":"mod.decay.lfo","value":1.0},
+ {"t":0.2,"type":"on","note":60,"vel":100}
+]}

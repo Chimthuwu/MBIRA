@@ -1,0 +1,6 @@
+{"events":[
+ {"t":0.2,"type":"param","name":"exciter.noise","value":1.0},
+ {"t":0.2,"type":"param","name":"exciter.hardness","value":1.0},
+ {"t":0.5,"type":"on","note":60,"vel":100},
+ {"t":3.0,"type":"off","note":60}
+]}

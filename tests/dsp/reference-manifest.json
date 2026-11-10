@@ -1,0 +1,126 @@
+{
+  "note": "SHA-256 of real-native renders (mbira-poc render -> build/dsp-bundle.js, 16-bit PCM stereo). Regenerate with `node tests/dsp/regression.mjs --update` only for DELIBERATE DSP changes; state the reason in the commit message.",
+  "bundleSha256": "64d3c712ae2c20942dc478006767acf3aaaccced30bdd290003a1f52d94a02dd",
+  "cases": {
+    "dz-phrase": {
+      "events": "tests/events/phrase.json",
+      "duration": 5,
+      "instrument": "src/instruments/mbira-dzavadzimu.json",
+      "sha256": "736dd4b4a22d011cf7adc7adc9b6179f19b87901d115762fd23d9efc9ff80b8c"
+    },
+    "ny-phrase": {
+      "events": "tests/events/phrase.json",
+      "duration": 5,
+      "instrument": "src/instruments/nyunga-nyunga.json",
+      "sha256": "357fb8021fa59b8dfd1f393206266dd48744177b790055b1c2bba7348689f85f"
+    },
+    "dz-pluck-0.0": {
+      "events": "tests/events/listen-pluck-0.0.json",
+      "duration": 4,
+      "instrument": "src/instruments/mbira-dzavadzimu.json",
+      "sha256": "e1403684ffaa09dae39f3a0aec41323ee8a2e19f8abf94285a8fea8745a54204"
+    },
+    "dz-pluck-0.5": {
+      "events": "tests/events/listen-pluck-0.5.json",
+      "duration": 4,
+      "instrument": "src/instruments/mbira-dzavadzimu.json",
+      "sha256": "44c33d12207ae5402df800436a1cb592b57bb56b6176fa44d78fa5973e4ff069"
+    },
+    "dz-pluck-1.0": {
+      "events": "tests/events/listen-pluck-1.0.json",
+      "duration": 4,
+      "instrument": "src/instruments/mbira-dzavadzimu.json",
+      "sha256": "a54536af2c371bfd4d9d768b96503b2fa0cf3de084ec96e1453b5864a09daa18"
+    },
+    "dz-buzz-off": {
+      "events": "tests/events/listen-buzz-off.json",
+      "duration": 5,
+      "instrument": "src/instruments/mbira-dzavadzimu.json",
+      "sha256": "f28e54e46f44d4426f8b49bd81ddab9af0314c1c9892afd6c1b48e8c64a0b35a"
+    },
+    "dz-buzz-on": {
+      "events": "tests/events/listen-buzz-on.json",
+      "duration": 5,
+      "instrument": "src/instruments/mbira-dzavadzimu.json",
+      "sha256": "736dd4b4a22d011cf7adc7adc9b6179f19b87901d115762fd23d9efc9ff80b8c"
+    },
+    "dz-macro-bright": {
+      "events": "tests/events/listen-macro-bright-max.json",
+      "duration": 4,
+      "instrument": "src/instruments/mbira-dzavadzimu.json",
+      "sha256": "f924b0b030d593495ce6456f1c8e72d394aa2c26ae6f14e14711f1d5b0e13fd4"
+    },
+    "dz-bright-min": {
+      "events": "tests/events/listen-macro-bright-min.json",
+      "duration": 4,
+      "instrument": "src/instruments/mbira-dzavadzimu.json",
+      "sha256": "6406e3c0f3b8d4e89200115e9d95be083dd5af977da2f2afd18419a578ecd520"
+    },
+    "dz-bright-mid": {
+      "events": "tests/events/listen-macro-bright-mid.json",
+      "duration": 4,
+      "instrument": "src/instruments/mbira-dzavadzimu.json",
+      "sha256": "67007d171568a16172ddd7cc8c9d2dc787075349f7675e102ef75b2492a41db8"
+    },
+    "dz-macro-res-off": {
+      "events": "tests/events/listen-macro-res-off.json",
+      "duration": 5,
+      "instrument": "src/instruments/mbira-dzavadzimu.json",
+      "sha256": "2f51621f0683107be827b99a5eaa59d262770ab18dd5771a860cce2f6267e019"
+    },
+    "dz-macro-buzz-max": {
+      "events": "tests/events/listen-macro-buzz-max.json",
+      "duration": 5,
+      "instrument": "src/instruments/mbira-dzavadzimu.json",
+      "sha256": "b112dd57abf228ec41afddbd4de6081d966a6fe8e5e6d119ecfe755545b27b5e"
+    },
+    "dz-master-half": {
+      "events": "tests/events/listen-master-half.json",
+      "duration": 5,
+      "instrument": "src/instruments/mbira-dzavadzimu.json",
+      "sha256": "c9ae899a94414c50721d8ec20e0306327b2b5c0040a16421900529e9923920aa"
+    },
+    "dz-modal-geo": {
+      "events": "tests/events/modal-geometry-max.json",
+      "duration": 4,
+      "instrument": "src/instruments/mbira-dzavadzimu.json",
+      "sha256": "41d531c4c1868778715d6454cb7d4b5c88902a002470a4a402a34860932c9c1c"
+    },
+    "dz-modal-mat": {
+      "events": "tests/events/modal-material-max.json",
+      "duration": 4,
+      "instrument": "src/instruments/mbira-dzavadzimu.json",
+      "sha256": "8a372f0bc68a95fbea5776d363eaa2582db19453ae1f045a8e868a2c9cdceac6"
+    },
+    "dz-modal-decay": {
+      "events": "tests/events/modal-decay-min.json",
+      "duration": 4,
+      "instrument": "src/instruments/mbira-dzavadzimu.json",
+      "sha256": "275ba83d64054b2d0550df6e61723da8893d75fb37599472e22dfc05c4f30891"
+    },
+    "dz-modal-noise": {
+      "events": "tests/events/exciter-noise-max.json",
+      "duration": 4,
+      "instrument": "src/instruments/mbira-dzavadzimu.json",
+      "sha256": "c72da11023d902d71bc107a711d683bc2ff720f8f300bb9064696052f80d9ad6"
+    },
+    "dz-mod-decay-vel": {
+      "events": "tests/events/modal-mod-decay-vel.json",
+      "duration": 7,
+      "instrument": "src/instruments/mbira-dzavadzimu.json",
+      "sha256": "c09011846305c604827b2735650e52892913bf7a90e437cf78eaffc2caad461e"
+    },
+    "dz-mod-decay-lfo-off": {
+      "events": "tests/events/modal-mod-decay-lfo-off.json",
+      "duration": 4,
+      "instrument": "src/instruments/mbira-dzavadzimu.json",
+      "sha256": "61ae462682cd51492cb6a02f287cde636991542dcb6eecf4420ea3b2b96078b1"
+    },
+    "dz-mod-decay-lfo": {
+      "events": "tests/events/modal-mod-decay-lfo.json",
+      "duration": 4,
+      "instrument": "src/instruments/mbira-dzavadzimu.json",
+      "sha256": "482ebb3e73cdc51c1cdaefdbd7e3133bb1929734936ede7bda4a3e5c17f97a5e"
+    }
+  }
+}
