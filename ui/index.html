@@ -30,6 +30,9 @@
       <input class="input" id="preset-name" type="text" maxlength="40" placeholder="preset name"
              aria-label="Preset name" autocomplete="off" spellcheck="false">
       <button class="btn" id="preset-save" title="Save the current knobs, LFO rate and mod-strip depths (Enter in the name box)">Save</button>
+      <button class="btn" id="preset-export" title="Export the current patch as a .mbirapreset JSON file">Export</button>
+      <button class="btn" id="preset-import" title="Import presets from a .mbirapreset file">Import</button>
+      <input id="preset-file" type="file" accept=".json,.mbirapreset,.mbirabank,application/json" hidden>
       <div class="master-mini fader" data-param="master" title="Master volume">
         <label class="master-mini__label" for="master">Vol</label>
         <input class="range master-mini__range" type="range" id="master" min="0" max="1" step="0.01" value="1">

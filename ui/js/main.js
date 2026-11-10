@@ -106,6 +106,9 @@ mountPresets({
   select: $('#preset'),
   nameInput: $('#preset-name'),
   saveButton: $('#preset-save'),
+  exportButton: $('#preset-export'),
+  importButton: $('#preset-import'),
+  importInput: $('#preset-file'),
   controls,
   onStatus: (text) => { const s = $('#st-preset'); if (s) s.textContent = `Preset: ${text}`; },
 });

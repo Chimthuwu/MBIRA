@@ -18,6 +18,53 @@
 export const PRESET_STORAGE_KEY = 'mbira.presets.v1';
 export const PRESET_SCHEMA = 1;
 
+// ── preset file format (§5.4, portable, versioned) ──────────────────────────
+// A single-preset file: { v:1, name, params:{<path>:value} }
+// A bank file:          { v:1, type:'bank', presets:[{name,params}], last }
+// parsePresetFile returns { kind:'preset', name, params } or
+// { kind:'bank', presets:[{name,params}], last }. Unknown v → throws (so a
+// future format bump can be rejected cleanly instead of loading garbage).
+export const PRESET_FILE_SCHEMA = 1;
+
+function normalizeParams(input) {
+  if (!input || typeof input !== 'object') throw new Error('preset has no params object');
+  const out = {};
+  for (const [k, v] of Object.entries(input)) {
+    if (typeof v === 'number' && Number.isFinite(v)) out[k] = v;
+  }
+  if (Object.keys(out).length === 0) throw new Error('preset has no valid numeric params');
+  return out;
+}
+
+export function serializePreset({ name = 'Preset', params = {} } = {}) {
+  return JSON.stringify({ v: PRESET_FILE_SCHEMA, name, params });
+}
+
+export function serializeBank({ presets = [], last = '' } = {}) {
+  return JSON.stringify({ v: PRESET_FILE_SCHEMA, type: 'bank', presets, last });
+}
+
+export function parsePresetFile(text) {
+  let obj;
+  try { obj = JSON.parse(text); }
+  catch { throw new Error('preset file is not valid JSON'); }
+  if (!obj || typeof obj !== 'object') throw new Error('preset file is not an object');
+  if (obj.v !== PRESET_FILE_SCHEMA) throw new Error(`unsupported preset version v=${obj.v}`);
+  if (obj.type === 'bank') {
+    if (!Array.isArray(obj.presets)) throw new Error('bank has no presets array');
+    const presets = obj.presets.map((p) => ({
+      name: (p && typeof p.name === 'string' && p.name) || 'Preset',
+      params: normalizeParams(p && p.params),
+    }));
+    return { kind: 'bank', presets, last: typeof obj.last === 'string' ? obj.last : '' };
+  }
+  return {
+    kind: 'preset',
+    name: typeof obj.name === 'string' && obj.name ? obj.name : 'Imported Preset',
+    params: normalizeParams(obj.params),
+  };
+}
+
 function readStore(){
   try {
     const raw = localStorage.getItem(PRESET_STORAGE_KEY);
@@ -38,7 +85,7 @@ function writeStore(store){
 
 const round3 = (v) => Math.round(v * 1000) / 1000;
 
-export function mountPresets({ select, nameInput, saveButton, controls, onStatus }){
+export function mountPresets({ select, nameInput, saveButton, exportButton, importButton, importInput, controls, onStatus }){
   const store = readStore();
   const paths = [...controls.keys()].sort();
 
@@ -113,6 +160,54 @@ export function mountPresets({ select, nameInput, saveButton, controls, onStatus
   saveButton?.addEventListener('click', save);
   nameInput?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter'){ e.preventDefault(); save(); }
+  });
+
+  // ── §5.4: portable preset files on disk (versioned round-trip) ──
+  const download = (filename, text) => {
+    try {
+      const blob = new Blob([text], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch (_) { if (onStatus) onStatus('export failed'); }
+  };
+
+  exportButton?.addEventListener('click', () => {
+    const params = snapshot();
+    const base = (nameInput && nameInput.value ? nameInput.value : 'preset')
+      .trim().replace(/[^\w.-]+/g, '_') || 'preset';
+    download(`${base}.mbirapreset`, serializePreset({ name: (nameInput && nameInput.value) || 'Preset', params }));
+    if (onStatus) onStatus(`exported ${Object.keys(params).length} params`);
+  });
+
+  importButton?.addEventListener('click', () => importInput?.click());
+
+  importInput?.addEventListener('change', async () => {
+    const f = importInput.files && importInput.files[0];
+    if (!f) return;
+    try {
+      const r = parsePresetFile(await f.text());
+      if (r.kind === 'bank') {
+        for (const p of r.presets) {
+          const ex = store.presets.find((q) => q.name === p.name);
+          if (ex) ex.params = p.params; else store.presets.push(p);
+        }
+        if (r.last) store.last = r.last;
+      } else {
+        const ex = store.presets.find((q) => q.name === r.name);
+        if (ex) ex.params = r.params; else store.presets.push({ name: r.name, params: r.params });
+      }
+      writeStore(store);
+      rebuild(store.last && store.presets.some((p) => p.name === store.last) ? store.last : '__factory');
+      if (store.last) recall(store.last);
+      if (onStatus) onStatus(`imported ${r.kind === 'bank' ? r.presets.length + ' presets' : r.name}`);
+    } catch (e) {
+      if (onStatus) onStatus(`import failed: ${e.message}`);
+    } finally {
+      importInput.value = '';
+    }
   });
 
   // Restore the preset used last session, so the knobs and strips come back as
