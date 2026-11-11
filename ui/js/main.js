@@ -1,4 +1,5 @@
 import { send, on } from './bridge.js';
+import { INSTRUMENTS } from './instruments.js';
 import { mountKeyboard } from './keyboard.js';
 import { mountFaders, mountKnobs, mountMeter, mountModStrips } from './controls.js';
 import { mountPresets } from './presets.js';
@@ -124,9 +125,17 @@ on('note.state', ({ note, on: isOn, velocity }) => kb.setHostNote(note, isOn, ve
 
 /* loaded instrument schematic → rebuild the tine field from real geometry */
 const instChip = $('#provisional') || document.querySelector('.provisional');
+const instrumentSelect = $('#instrument');
+if (instrumentSelect) {
+  for (const inst of INSTRUMENTS) instrumentSelect.add(new Option(inst.label, inst.id));
+  instrumentSelect.addEventListener('change', () => {
+    send({ v: 1, type: 'instrument.select', payload: { id: instrumentSelect.value } });
+  });
+}
 on('instrument', (p) => {
   if (!p || !p.id) return;
   if (kb.setInstrument(p.id) && instChip) instChip.textContent = p.name || p.id;
+  if (instrumentSelect) instrumentSelect.value = p.id;
 });
 on('param.state', ({ path, value }) => {
   const el = document.querySelector(`[data-param="${path}"]`);

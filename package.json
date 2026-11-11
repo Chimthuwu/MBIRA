@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "build:dsp": "esbuild src/dsp/index.js --bundle --format=iife --outfile=build/dsp-bundle.js",
-    "test": "npm run build:dsp && node tests/instruments/validate.mjs && node tests/dsp/sanity.mjs && node tests/dsp/regression.mjs && node tests/presets/roundtrip.mjs",
+    "test": "npm run build:dsp && node tests/instruments/validate.mjs && node tests/dsp/sanity.mjs && node tests/dsp/regression.mjs && node tests/presets/roundtrip.mjs && node tests/instruments/instrument-selector.test.mjs",
     "test:instruments": "node tests/instruments/validate.mjs"
   },
   "dependencies": {

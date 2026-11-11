@@ -28,6 +28,7 @@ namespace mbira_wv2 {
 // Sinks (called on the UI thread). Same contract as mbira_ui::run.
 using NoteSink  = std::function<void(int note, bool on)>;
 using ParamSink = std::function<void(const std::string& jsExpr)>;
+using InstrumentSink = std::function<void(const std::string& idOrPath)>;
 using PeakFn    = std::function<void(float* peakL, float* peakR)>;
 // Copies the most recent `maxN` mono bus samples in time order and returns how
 // many it wrote. Backed by a lock-free ring in the audio thread (main.cpp).
@@ -40,6 +41,7 @@ static EventRegistrationToken g_wmToken{};
 static EventRegistrationToken g_navToken{};
 static NoteSink   g_noteSink;
 static ParamSink  g_paramSink;
+static InstrumentSink g_instrumentSink;
 static PeakFn     g_peakFn;
 static WaveFn     g_waveFn;
 static double     g_sampleRate = 48000.0;   // for the UI's spectrum / spectrogram axes
@@ -52,6 +54,7 @@ struct WvNoteEvt { int note; bool on; int velocity; };
 static std::deque<WvNoteEvt> g_noteQueue;
 static std::mutex g_noteMutex;
 static std::atomic<bool> g_midiSeen { false };
+static std::atomic<bool> g_repostInstrument { false };
 // UI-thread only: active notes (MIDI + UI clicks) for the voice count.
 static std::set<int> g_activeNotes;
 static bool g_lastMidiOk = false;
@@ -67,6 +70,8 @@ inline void wvEnqueueNote(int note, bool on, int velocity) {
 // actual loaded instrument).
 static std::string g_instrumentJson;
 inline void wvSetInstrument(const std::string& envelope) { g_instrumentJson = envelope; }
+inline void wvSetInstrumentSink(InstrumentSink s) { g_instrumentSink = std::move(s); }
+inline void wvMarkInstrumentRepost() { g_repostInstrument.store(true); }
 
 inline void wvMarkMidiSeen() { g_midiSeen.store(true); }
 
@@ -354,9 +359,17 @@ static void handleUiMessage(const wchar_t* json) {
         wvSendHost(w.c_str());
       }
     }
-  } else if (fieldContains(L"\"type\"", json, L"preset") ||
-             fieldContains(L"\"type\"", json, L"instrument") || wcsstr(json, L"\"type\":\"note.state\"")) {
+  } else if (fieldContains(L"\"type\"", json, L"preset") || wcsstr(json, L"\"type\":\"note.state\"")) {
     // informational; ignore (no-op)
+  } else if (fieldContains(L"\"type\"", json, L"instrument")) {
+    // instrument.select -> resolve + load on the service thread (never here).
+    std::wstring id;
+    if (!parseStr(L"\"id\"", json, id)) parseStr(L"\"path\"", json, id);
+    if (id.empty()) {
+      wvLog("[wv2] instrument.select without payload.id/path - ignored\n");
+    } else if (g_instrumentSink) {
+      g_instrumentSink(std::string(id.begin(), id.end()));
+    }
   }
 }
 
@@ -366,7 +379,7 @@ inline void wvSendHost(const wchar_t* json) { if (g_wv) g_wv->PostWebMessageAsJs
 
 // Main entry: blocks on the message loop until the window closes. Mirrors
 // mbira_ui::run(). uiDir passed as UTF-8; converted to wide internally.
-inline int runWebView2(NoteSink noteSink, ParamSink paramSink, PeakFn peakFn, WaveFn waveFn,
+inline int runWebView2(NoteSink noteSink, ParamSink paramSink, InstrumentSink instrumentSink, PeakFn peakFn, WaveFn waveFn,
                        double sampleRate,
                        const std::string& uiDirUtf8, const std::string& userDataUtf8,
                        const std::string& logPathUtf8, bool enableCdp = false) {
@@ -375,6 +388,7 @@ inline int runWebView2(NoteSink noteSink, ParamSink paramSink, PeakFn peakFn, Wa
   if (!g_log) g_log = fopen("NUL", "w");
   g_noteSink = std::move(noteSink);
   g_paramSink = std::move(paramSink);
+  g_instrumentSink = std::move(instrumentSink);
   g_peakFn = std::move(peakFn);
   g_waveFn = std::move(waveFn);
   g_sampleRate = sampleRate > 1000.0 ? sampleRate : 48000.0;
@@ -453,6 +467,14 @@ inline int runWebView2(NoteSink noteSink, ParamSink paramSink, PeakFn peakFn, Wa
           g_wv->PostWebMessageAsJson(j);
           g_lastVoices = voices; g_statusDirty = false;
         } else if (g_statusDirty && !midiOk && voices == 0) { g_statusDirty = false; }
+      }
+      if (g_repostInstrument.exchange(false) && !g_instrumentJson.empty()) {
+        int n = MultiByteToWideChar(CP_UTF8, 0, g_instrumentJson.c_str(), -1, nullptr, 0);
+        if (n > 0) {
+          std::wstring w((size_t) n, L'\0');
+          MultiByteToWideChar(CP_UTF8, 0, g_instrumentJson.c_str(), -1, &w[0], n);
+          wvSendHost(w.c_str());
+        }
       }
       return 0;
     }

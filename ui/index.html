@@ -30,6 +30,10 @@
       <input class="input" id="preset-name" type="text" maxlength="40" placeholder="preset name"
              aria-label="Preset name" autocomplete="off" spellcheck="false">
       <button class="btn" id="preset-save" title="Save the current knobs, LFO rate and mod-strip depths (Enter in the name box)">Save</button>
+      <label class="field">
+        <span class="field__label">Instrument</span>
+        <select class="select" id="instrument" title="Switch the loaded instrument at runtime"></select>
+      </label>
       <button class="btn" id="preset-export" title="Export the current patch as a .mbirapreset JSON file">Export</button>
       <button class="btn" id="preset-import" title="Import presets from a .mbirapreset file">Import</button>
       <input id="preset-file" type="file" accept=".json,.mbirapreset,.mbirabank,application/json" hidden>

@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <map>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -152,32 +153,9 @@ static std::string jsStringLiteral(const std::string& s) {
   return o;
 }
 
-// Reads the instrument JSON, loads it into the DSP (voice pool rebuilds from
-// the key list; body config applied) and records the schematic geometry for
-// the UI. Returns false if no file is found (default 64-note pool stays).
-static bool loadInstrumentFromDisk(Engine& eng) {
-  const char* envp = getenv("MBIRA_INSTRUMENT");
-  std::string path = envp ? envp : "src/instruments/mbira-dzavadzimu.json";
-  // N-6 fix: a missing/unreadable file used to throw out of loadFileAsString
-  // and crash the host. Any failure here falls back to the default pool.
-  std::string text;
-  try { text = choc::file::loadFileAsString(path); }
-  catch (const std::exception& e) {
-    fprintf(stderr, "NOTE: instrument JSON not readable (%s: %s) - using default 64-note pool\n",
-            path.c_str(), e.what());
-    return false;
-  } catch (...) {
-    fprintf(stderr, "NOTE: instrument JSON not readable (%s) - using default 64-note pool\n", path.c_str());
-    return false;
-  }
-  if (text.empty()) {
-    fprintf(stderr, "NOTE: instrument JSON not found (%s) - using default 64-note pool\n", path.c_str());
-    return false;
-  }
-  if (!eng.call("__mbira.loadInstrument(" + jsStringLiteral(text) + ")")) {
-    fprintf(stderr, "ERROR: %s\n", eng.lastError.c_str());
-    return false;
-  }
+// Builds the schematic geometry (g_geom) + WebView2 envelope (g_instGeom) from
+// instrument JSON text. Shared by startup load and runtime instrument.select.
+static bool applyInstrumentGeometry(const std::string& text) {
   choc::value::Value root;
   try {
     root = choc::json::parse(text);
@@ -196,11 +174,10 @@ static bool loadInstrumentFromDisk(Engine& eng) {
     g_canvasH = (float) root["canvas"]["height"].get<double>();
     g_instrumentName = root["name"].toString();
   }
-  catch (const choc::json::ParseError& e) { fprintf(stderr, "ERROR: bad instrument JSON: %s\n", e.what()); return false; }
+  catch (const choc::json::ParseError& e) { fprintf(stderr, "ERROR: bad instrument JSON: %s\n", e.what()); g_geom.clear(); return false; }
   catch (const std::exception& e) { fprintf(stderr, "ERROR: bad instrument JSON geometry: %s\n", e.what()); g_geom.clear(); return false; }
-  fprintf(stderr, "Instrument: %s (%d keys) from %s\n", g_instrumentName.c_str(), (int) g_geom.size(), path.c_str());
-  // Compact geometry envelope for the WebView2 UI (posted when it reports
-  // ui.ready): {v:1,type:"instrument",payload:{id,name,keys:[{note,name,rank,x,y,len}]}}
+  // Compact geometry envelope for the WebView2 UI (posted on ui.ready and on a
+  // runtime instrument.select): {v:1,type:"instrument",payload:{id,name,keys:[...]}}
   {
     std::string o = "{\"v\":1,\"type\":\"instrument\",\"payload\":{\"id\":\"";
     o += root["id"].toString(); o += "\",\"name\":\"";
@@ -225,11 +202,59 @@ static bool loadInstrumentFromDisk(Engine& eng) {
   return true;
 }
 
+// Resolves an instrument id ("mbira-dzavadzimu") to its JSON path, or passes a
+// literal path through unchanged. Keep in sync with src/instruments/*.json ids.
+static std::string resolveInstrumentPath(const std::string& idOrPath) {
+  static const std::map<std::string, std::string> kRegistry = {
+    { "mbira-dzavadzimu", "src/instruments/mbira-dzavadzimu.json" },
+    { "nyunga-nyunga",    "src/instruments/nyunga-nyunga.json" },
+  };
+  auto it = kRegistry.find(idOrPath);
+  return it != kRegistry.end() ? it->second : idOrPath;
+}
+
+// Loads instrument text into the DSP (voice pool rebuild + body config) and
+// rebuilds the schematic geometry. Returns false if the DSP rejects the JSON.
+static bool applyInstrumentText(Engine& eng, const std::string& text) {
+  if (!eng.call("__mbira.loadInstrument(" + jsStringLiteral(text) + ")")) {
+    fprintf(stderr, "ERROR: %s\n", eng.lastError.c_str());
+    return false;
+  }
+  return applyInstrumentGeometry(text);
+}
+
+// Reads the instrument JSON named by MBIRA_INSTRUMENT (or the default), loads it
+// into the DSP and records the schematic geometry for the UI. Returns false if
+// no file is found (default 64-note pool stays).
+static bool loadInstrumentFromDisk(Engine& eng) {
+  const char* envp = getenv("MBIRA_INSTRUMENT");
+  std::string path = envp ? envp : "src/instruments/mbira-dzavadzimu.json";
+  // N-6 fix: a missing/unreadable file used to throw out of loadFileAsString
+  // and crash the host. Any failure here falls back to the default pool.
+  std::string text;
+  try { text = choc::file::loadFileAsString(path); }
+  catch (const std::exception& e) {
+    fprintf(stderr, "NOTE: instrument JSON not readable (%s: %s) - using default 64-note pool\n",
+            path.c_str(), e.what());
+    return false;
+  } catch (...) {
+    fprintf(stderr, "NOTE: instrument JSON not readable (%s) - using default 64-note pool\n", path.c_str());
+    return false;
+  }
+  if (text.empty()) {
+    fprintf(stderr, "NOTE: instrument JSON not found (%s) - using default 64-note pool\n", path.c_str());
+    return false;
+  }
+  if (!applyInstrumentText(eng, text)) return false;
+  fprintf(stderr, "Instrument: %s (%d keys) from %s\n", g_instrumentName.c_str(), (int) g_geom.size(), path.c_str());
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // Events
 
 struct Event {
-  enum Kind { NoteOn, NoteOff, Param, AllDamp, Sustain, Raw } kind;
+  enum Kind { NoteOn, NoteOff, Param, AllDamp, Sustain, Raw, LoadInstrument } kind;
   double t = 0;      // schedule time (seconds) in render mode
   int note = 0, vel = 0, mode = 0;
   float value = 0;
@@ -247,6 +272,11 @@ static bool dispatchEvent(Engine& eng, const Event& ev) {
     case Event::Sustain: return eng.call("__mbira.sustain(" + std::string(ev.value > 0.5f ? "true" : "false") + ")");
     case Event::AllDamp: return ev.note == -1 ? eng.call("__mbira.trigger()") : eng.call("__mbira.allNotesDamp()");
     case Event::Raw:     return eng.call(ev.name); // pre-built JS expression (UI params)
+    case Event::LoadInstrument:
+      if (!applyInstrumentText(eng, ev.name)) return false;
+      mbira_wv2::wvSetInstrument(g_instGeom);
+      mbira_wv2::wvMarkInstrumentRepost();
+      return true;
   }
   return false;
 }
@@ -494,6 +524,16 @@ static int runLive(Engine& eng, bool withUi, bool webviewUi, double autoQuitS) {
       std::lock_guard<std::mutex> lk(qMutex);
       if (q.size() < 1024) q.push_back(ev);
     };
+    auto instrumentSink = [&](const std::string& idOrPath) {
+      std::string path = resolveInstrumentPath(idOrPath);
+      std::string text;
+      try { text = choc::file::loadFileAsString(path); }
+      catch (const std::exception& e) { fprintf(stderr, "instrument.select load failed (%s: %s)\n", path.c_str(), e.what()); return; }
+      if (text.empty()) { fprintf(stderr, "instrument.select: no text at %s\n", path.c_str()); return; }
+      Event ev; ev.kind = Event::LoadInstrument; ev.name = text;
+      std::lock_guard<std::mutex> lk(qMutex);
+      if (q.size() < 1024) q.push_back(ev);
+    };
     if (webviewUi) {
       // Write the UI dir as an absolute path (virtual-host mapping needs it).
       wchar_t absBuf[512]; DWORD n = GetFullPathNameW(L"ui", 512, absBuf, nullptr);
@@ -503,7 +543,7 @@ static int runLive(Engine& eng, bool withUi, bool webviewUi, double autoQuitS) {
       auto waveFn = [&](float* dst, int maxN) { return readScopeWave(dst, maxN); };
       mbira_wv2::wvSetInstrument(g_instGeom);   // UI asks for it on ui.ready
       fprintf(stderr, "WebView2 UI: %s\n", uiDir.c_str());
-      mbira_wv2::runWebView2(sink, paramSink, peakFn, waveFn, eng.sampleRate,
+      mbira_wv2::runWebView2(sink, paramSink, instrumentSink, peakFn, waveFn, eng.sampleRate,
                              uiDir,
                              std::string("Z:/GITHUB/MBIRA/build/wv2-userdata"),
                              std::string("Z:/GITHUB/MBIRA/build/liveui.log"),
