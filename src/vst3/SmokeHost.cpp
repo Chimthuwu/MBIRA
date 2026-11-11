@@ -1,6 +1,8 @@
-// MBIRA VST3 spike — offline smoke test host.
+// MBIRA VST3 — offline smoke test host.
 // Loads the built MBIRA.vst3 DLL directly (no full hosting layer), creates the
 // component, sends a note-on, processes audio and asserts a non-silent output.
+// Also switches instruments mid-run (Instrument parameter change + a new note-on)
+// to exercise the LoadInstrument path end-to-end.
 #include "pluginterfaces/base/ipluginbase.h"
 #include "pluginterfaces/vst/ivstcomponent.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
@@ -8,6 +10,7 @@
 #include "pluginterfaces/vst/ivstevents.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "public.sdk/source/vst/hosting/eventlist.h"
+#include "public.sdk/source/vst/hosting/parameterchanges.h"
 
 #include <windows.h>
 #include <cmath>
@@ -19,6 +22,9 @@ using namespace Steinberg;
 using namespace Steinberg::Vst;
 
 typedef IPluginFactory* (PLUGIN_API* GetPluginFactoryFunc) ();
+
+// Instrument parameter id — must match MbiraPlugin.cpp (0 = dzaVadzimu, 1 = nyunga-nyunga).
+static const Vst::ParamID kInstParam = 1001;
 
 int main (int argc, char** argv) {
   const char* dllPath = argc > 1 ? argv[1] : "build-vst3/vst3/MBIRA.vst3/Contents/x86_64-win/MBIRA.vst3";
@@ -64,10 +70,13 @@ int main (int argc, char** argv) {
   if (proc->setProcessing (true) != kResultOk && proc->setProcessing (true) != kNotImplemented)
     { fprintf (stderr, "FAIL: setProcessing(true)\n"); return 1; }
 
-  // process loop: note-on at block 0, render ~1 s, expect non-silent output
+  // process loop: note-on at block 0 (dzaVadzimu), switch instrument at
+  // switchBlock, new note-on at reNoteBlock (nyunga-nyunga). Peak per phase is
+  // measured and both must be non-silent.
   const int32 block = 256, blocks = 48000 / block;
+  const int32 switchBlock = 100, reNoteBlock = 101;
   std::vector<float> planes (2 * block, 0.f);
-  double peak = 0.0;
+  double peakDza = 0.0, peakNyunga = 0.0;
   for (int32 b = 0; b < blocks; ++b) {
     ProcessData data {};
     ProcessContext ctx {};
@@ -81,7 +90,15 @@ int main (int argc, char** argv) {
     out.channelBuffers32 = chans;
     data.outputs = &out;
 
-    if (b == 0) {
+    ParameterChanges pc (1);
+    if (b == switchBlock) {
+      int32 idx = 0;
+      IParamValueQueue* q = pc.addParameterData (kInstParam, idx);
+      if (q) q->addPoint (0, 1.0, idx);
+      data.inputParameterChanges = &pc;
+    }
+
+    if (b == 5) {  // early dza note: stresses the startup-load/race fix
       EventList events;
       Event ev {};
       ev.busIndex = 0; ev.sampleOffset = 0; ev.ppqPosition = 0; ev.flags = 0;
@@ -90,11 +107,21 @@ int main (int argc, char** argv) {
       events.addEvent (ev);
       data.inputEvents = &events;
     }
+    if (b == reNoteBlock) {
+      EventList events;
+      Event ev {};
+      ev.busIndex = 0; ev.sampleOffset = 0; ev.ppqPosition = 0; ev.flags = 0;
+      ev.type = Event::kNoteOnEvent;
+      ev.noteOn.channel = 0; ev.noteOn.pitch = 72; ev.noteOn.velocity = 100.f / 127.f;
+      events.addEvent (ev);
+      data.inputEvents = &events;
+    }
 
     if (proc->process (data) != kResultOk) { fprintf (stderr, "FAIL: process\n"); return 1; }
-    if (b > 3) // allow a few blocks for the JS service thread to apply the note
-      for (int32 i = 0; i < block; ++i)
-        peak = std::max (peak, (double) std::fabs (chans[0][i]));
+    if (b > 10 && b < switchBlock)
+      for (int32 i = 0; i < block; ++i) peakDza = std::max (peakDza, (double) std::fabs (chans[0][i]));
+    if (b > reNoteBlock + 3)
+      for (int32 i = 0; i < block; ++i) peakNyunga = std::max (peakNyunga, (double) std::fabs (chans[0][i]));
   }
 
   proc->setProcessing (false);
@@ -106,8 +133,10 @@ int main (int argc, char** argv) {
   factory->release ();
   FreeLibrary (mod);
 
-  double dbfs = 20.0 * std::log10 (peak > 1e-9 ? peak : 1e-9);
-  printf ("{\"smoke\":\"vst3\",\"peak\":%.6f,\"peak_dbfs\":%.2f,\"ok\":%s}\n",
-          peak, dbfs, peak > 1e-3 ? "true" : "false");
-  return peak > 1e-3 ? 0 : 1;
+  double dbfsD = 20.0 * std::log10 (peakDza > 1e-9 ? peakDza : 1e-9);
+  double dbfsN = 20.0 * std::log10 (peakNyunga > 1e-9 ? peakNyunga : 1e-9);
+  bool ok = (peakDza > 1e-3) && (peakNyunga > 1e-3);
+  printf ("{\"smoke\":\"vst3\",\"peak_dza\":%.6f,\"peak_dza_dbfs\":%.2f,\"peak_nyunga\":%.6f,\"peak_nyunga_dbfs\":%.2f,\"ok\":%s}\n",
+          peakDza, dbfsD, peakNyunga, dbfsN, ok ? "true" : "false");
+  return ok ? 0 : 1;
 }

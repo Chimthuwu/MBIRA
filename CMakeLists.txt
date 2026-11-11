@@ -65,6 +65,13 @@ if(EXISTS ${VST3SDK_DIR}/public.sdk/source/vst/vstaudioeffect.h)
   string(REPLACE "@@MBIRA_BUNDLE_CONTENT@@" "${MBIRA_BUNDLE_CONTENT}" MBIRA_HEADER_TPL "${MBIRA_HEADER_TPL}")
   file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/generated/dsp_bundle.h "${MBIRA_HEADER_TPL}")
 
+  # Embed the two shipped instruments so the plugin loads real voice geometry
+  # without filesystem access (a DAW-hosted plugin has no path to the repo).
+  file(READ ${CMAKE_CURRENT_SOURCE_DIR}/src/instruments/mbira-dzavadzimu.json MBIRA_DZA_CONTENT)
+  file(READ ${CMAKE_CURRENT_SOURCE_DIR}/src/instruments/nyunga-nyunga.json MBIRA_NYUNGA_CONTENT)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/vst3/instrument_default.h.in
+                 ${CMAKE_CURRENT_BINARY_DIR}/generated/instrument_default.h @ONLY)
+
   set(SMTG_ENABLE_VST3_PLUGIN_EXAMPLES OFF CACHE BOOL "" FORCE)
   set(SMTG_ENABLE_VST3_HOSTING_EXAMPLES ON CACHE BOOL "" FORCE)  # builds the `validator` executable
   set(SMTG_ENABLE_VSTGUI_SUPPORT OFF CACHE BOOL "" FORCE)
