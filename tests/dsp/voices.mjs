@@ -169,13 +169,9 @@ const tailOn = rmsDbfs(wo.left, Math.floor(2.5 * wo.rate), Math.floor(3.0 * wo.r
 const tailOff = rmsDbfs(wf.left, Math.floor(2.5 * wf.rate), Math.floor(3.0 * wf.rate));
 const dDb = tailOn - tailOff;
 console.log(`sustain tail RMS(2.5-3.0s): on=${tailOn.toFixed(1)} dBFS  off=${tailOff.toFixed(1)} dBFS (${dDb.toFixed(1)} dB)`);
-if (!(tailOn > -45)) fail('sus-on tail is silent — chord did not ring');
-if (!(tailOff > -45)) fail('sus-off tail is silent — chord did not ring');
-if (dDb < 3) {
-  console.warn('  WARN: sustain pedal had ' + dDb.toFixed(1) + ' dB effect (audibly inert).');
-  console.warn('        cfg.adsr.sustain = 1.0 (index.js:137) makes note-off a no-op, so the');
-  console.warn('        tine rings freely regardless of the pedal. The pedal is wired (event ->');
-  console.warn('        __mbira.sustain) but only audible once release attenuates a note.');
-}
+// Damper model: pedal-held chord keeps ringing past its note-offs, while the
+// no-pedal chord is damped to silence. So on >> off at this window.
+if (!(tailOn > -45)) fail('sus-on tail is silent — pedal did not hold the chord');
+if (!(dDb > 20)) fail(`sustain pedal had only ${dDb.toFixed(1)} dB effect (expected large: no-pedal chord damps, pedal holds)`);
 
-console.log(`voice suite OK — steal-overflow safe (80>64 voices, no clip/NaN) + sustain pedal path renders (${(dDb).toFixed(1)} dB on/off; inert pending damper model)`);
+console.log(`voice suite OK — steal-overflow safe (80>64 voices, no clip/NaN) + sustain pedal holds the chord (+${dDb.toFixed(1)} dB tail vs damped)`);

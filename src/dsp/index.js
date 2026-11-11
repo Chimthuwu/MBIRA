@@ -439,7 +439,12 @@ function buildVoiceGraph(st, lfo) {
   const rel = el.const({ key: 'adsr.release', value: cfg.adsr.release });
   const relEnv = el.env(el.tau2pole(atk), el.tau2pole(rel),
                         el.const({ key: `damp.${note}`, value: st.damp }));
-  const sus = el.const({ key: 'adsr.sustain', value: cfg.adsr.sustain });
+  // Damper model (M2 3.4): a released note (no pedal) is damped to silence
+  // (release level 0); a held or pedal-sustained note keeps ringing at the
+  // sustain level. Steals and allNotesDamp also set damp=0 with sustained=false,
+  // so they now actually silence the voice (previously sus=1.0 let them ring).
+  const damped = st.damp <= 0.5 && !st.sustained;
+  const sus = el.const({ key: 'adsr.sustain.' + note, value: damped ? 0.0 : cfg.adsr.sustain });
   const ampEnv = el.add(sus, el.mul(el.sub(1.0, sus), relEnv));
   return el.mul(ampEnv, el.add(...modes));
 }

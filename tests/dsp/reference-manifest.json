@@ -1,114 +1,114 @@
 {
   "note": "SHA-256 of real-native renders (mbira-poc render -> build/dsp-bundle.js, 16-bit PCM stereo). Regenerate with `node tests/dsp/regression.mjs --update` only for DELIBERATE DSP changes; state the reason in the commit message.",
-  "bundleSha256": "64d3c712ae2c20942dc478006767acf3aaaccced30bdd290003a1f52d94a02dd",
+  "bundleSha256": "63d04b20d321ab70db3a5749e55b5725dbf9482e159182b3671f2c9c74f8ff9e",
   "cases": {
     "dz-phrase": {
       "events": "tests/events/phrase.json",
       "duration": 5,
       "instrument": "src/instruments/mbira-dzavadzimu.json",
-      "sha256": "736dd4b4a22d011cf7adc7adc9b6179f19b87901d115762fd23d9efc9ff80b8c"
+      "sha256": "3dc8eb42923ff795b3deb564decfb55e25ceb825c8ecf3205f9ad87164e8bcca"
     },
     "ny-phrase": {
       "events": "tests/events/phrase.json",
       "duration": 5,
       "instrument": "src/instruments/nyunga-nyunga.json",
-      "sha256": "357fb8021fa59b8dfd1f393206266dd48744177b790055b1c2bba7348689f85f"
+      "sha256": "339b86cc16d85e2ebe7d3a1c311b06afd2837f170e51a3eb55b14b6d5bb72bef"
     },
     "dz-pluck-0.0": {
       "events": "tests/events/listen-pluck-0.0.json",
       "duration": 4,
       "instrument": "src/instruments/mbira-dzavadzimu.json",
-      "sha256": "e1403684ffaa09dae39f3a0aec41323ee8a2e19f8abf94285a8fea8745a54204"
+      "sha256": "061a54ac21728b163ead659fc0202e0f4c23cb912e368571985eebecc6de48a6"
     },
     "dz-pluck-0.5": {
       "events": "tests/events/listen-pluck-0.5.json",
       "duration": 4,
       "instrument": "src/instruments/mbira-dzavadzimu.json",
-      "sha256": "44c33d12207ae5402df800436a1cb592b57bb56b6176fa44d78fa5973e4ff069"
+      "sha256": "452f6fcca13dffaae8925e853bb8c8e7341e6f83255620b6f1cb0cd85ff0af3a"
     },
     "dz-pluck-1.0": {
       "events": "tests/events/listen-pluck-1.0.json",
       "duration": 4,
       "instrument": "src/instruments/mbira-dzavadzimu.json",
-      "sha256": "a54536af2c371bfd4d9d768b96503b2fa0cf3de084ec96e1453b5864a09daa18"
+      "sha256": "08db8fd041548df3fce849782b70b2a151be3c7d30b427d0472991a639db2102"
     },
     "dz-buzz-off": {
       "events": "tests/events/listen-buzz-off.json",
       "duration": 5,
       "instrument": "src/instruments/mbira-dzavadzimu.json",
-      "sha256": "f28e54e46f44d4426f8b49bd81ddab9af0314c1c9892afd6c1b48e8c64a0b35a"
+      "sha256": "9bec20a168dff012c19197b9abdbd8465c02c76f79bfdbf8ee81d6e400c00783"
     },
     "dz-buzz-on": {
       "events": "tests/events/listen-buzz-on.json",
       "duration": 5,
       "instrument": "src/instruments/mbira-dzavadzimu.json",
-      "sha256": "736dd4b4a22d011cf7adc7adc9b6179f19b87901d115762fd23d9efc9ff80b8c"
+      "sha256": "b64f924b5c98a0e84547d20603c40795e3c7295a853df46f0499b8c16ea8b14d"
     },
     "dz-macro-bright": {
       "events": "tests/events/listen-macro-bright-max.json",
       "duration": 4,
       "instrument": "src/instruments/mbira-dzavadzimu.json",
-      "sha256": "f924b0b030d593495ce6456f1c8e72d394aa2c26ae6f14e14711f1d5b0e13fd4"
+      "sha256": "e00af5ca3c730d35af73ca936efa8b1924edc35185a1479906b70f5041fda177"
     },
     "dz-bright-min": {
       "events": "tests/events/listen-macro-bright-min.json",
       "duration": 4,
       "instrument": "src/instruments/mbira-dzavadzimu.json",
-      "sha256": "6406e3c0f3b8d4e89200115e9d95be083dd5af977da2f2afd18419a578ecd520"
+      "sha256": "d7e95168a115dc001180b9f5d50ea8a213074d812a44abcb1b57be4b99edb468"
     },
     "dz-bright-mid": {
       "events": "tests/events/listen-macro-bright-mid.json",
       "duration": 4,
       "instrument": "src/instruments/mbira-dzavadzimu.json",
-      "sha256": "67007d171568a16172ddd7cc8c9d2dc787075349f7675e102ef75b2492a41db8"
+      "sha256": "35f564b5653b509478c8ed400afb983c6006509d645dd715d783b1526da7ab24"
     },
     "dz-macro-res-off": {
       "events": "tests/events/listen-macro-res-off.json",
       "duration": 5,
       "instrument": "src/instruments/mbira-dzavadzimu.json",
-      "sha256": "2f51621f0683107be827b99a5eaa59d262770ab18dd5771a860cce2f6267e019"
+      "sha256": "c4f1edefb07a3ea7b7007f738333cdb2bbf321434454eee176786716cfb0bfa3"
     },
     "dz-macro-buzz-max": {
       "events": "tests/events/listen-macro-buzz-max.json",
       "duration": 5,
       "instrument": "src/instruments/mbira-dzavadzimu.json",
-      "sha256": "b112dd57abf228ec41afddbd4de6081d966a6fe8e5e6d119ecfe755545b27b5e"
+      "sha256": "c3ead8325d37afa23a64de7b5c8eefb2ce020e5d2a88bed1ecb383d326c9b08b"
     },
     "dz-master-half": {
       "events": "tests/events/listen-master-half.json",
       "duration": 5,
       "instrument": "src/instruments/mbira-dzavadzimu.json",
-      "sha256": "c9ae899a94414c50721d8ec20e0306327b2b5c0040a16421900529e9923920aa"
+      "sha256": "60626ac4063f0393a1d732dfa4d07ab2cd7b974c8cd85032515963a6e9f16117"
     },
     "dz-modal-geo": {
       "events": "tests/events/modal-geometry-max.json",
       "duration": 4,
       "instrument": "src/instruments/mbira-dzavadzimu.json",
-      "sha256": "41d531c4c1868778715d6454cb7d4b5c88902a002470a4a402a34860932c9c1c"
+      "sha256": "c0808844e0600c6d53899d09d9599b998f4f1328224f2b8d831ec8027c03b427"
     },
     "dz-modal-mat": {
       "events": "tests/events/modal-material-max.json",
       "duration": 4,
       "instrument": "src/instruments/mbira-dzavadzimu.json",
-      "sha256": "8a372f0bc68a95fbea5776d363eaa2582db19453ae1f045a8e868a2c9cdceac6"
+      "sha256": "0c69756ac8a7f2f1a287d3aac35bcd09021c26c4251aad2c6ea4ac85e170d476"
     },
     "dz-modal-decay": {
       "events": "tests/events/modal-decay-min.json",
       "duration": 4,
       "instrument": "src/instruments/mbira-dzavadzimu.json",
-      "sha256": "275ba83d64054b2d0550df6e61723da8893d75fb37599472e22dfc05c4f30891"
+      "sha256": "729b2eccb3f6150a287f88b4aee4d685f35c95e9f488d9a5b3ecca935d04abee"
     },
     "dz-modal-noise": {
       "events": "tests/events/exciter-noise-max.json",
       "duration": 4,
       "instrument": "src/instruments/mbira-dzavadzimu.json",
-      "sha256": "c72da11023d902d71bc107a711d683bc2ff720f8f300bb9064696052f80d9ad6"
+      "sha256": "8eff76d15c998bcf6a97298ff53a470c2bc1b766a347cc6f4380b42c8dd3cb84"
     },
     "dz-mod-decay-vel": {
       "events": "tests/events/modal-mod-decay-vel.json",
       "duration": 7,
       "instrument": "src/instruments/mbira-dzavadzimu.json",
-      "sha256": "c09011846305c604827b2735650e52892913bf7a90e437cf78eaffc2caad461e"
+      "sha256": "fa83894697a84c1bdf0986eefd691d4b986a0da7e9c31348cc7d0df8549db321"
     },
     "dz-mod-decay-lfo-off": {
       "events": "tests/events/modal-mod-decay-lfo-off.json",
