@@ -1,9 +1,10 @@
 /* ── presets ────────────────────────────────────────────────────────────────
    A preset is a named snapshot of EVERY wired control: the 3 macros, the 6
    modal knobs, master, the LFO rate and all 21 modulation-strip depths (18
-   per-note + 3 LFO). Values use the same paths the UI already posts with
-   param.set, so a recall is a batch of real parameter changes — nothing here is
-   a UI-only label.
+   per-note + 3 LFO) — plus the loaded instrument id, so a recall re-selects the
+   instrument before restoring the knobs. Values use the same paths the UI already
+   posts with param.set, so a recall is a batch of real parameter changes —
+   nothing here is a UI-only label.
 
    Storage is localStorage under PRESET_STORAGE_KEY, which lives in the WebView2
    user-data folder and therefore survives app restarts. The §5.4 preset files
@@ -17,13 +18,20 @@
 
 export const PRESET_STORAGE_KEY = 'mbira.presets.v1';
 export const PRESET_SCHEMA = 1;
+import { INSTRUMENTS } from './instruments.js';
+const KNOWN_INSTRUMENTS = new Set(INSTRUMENTS.map((i) => i.id));
+function knownInstrument(id){
+  return typeof id === 'string' && KNOWN_INSTRUMENTS.has(id) ? id : undefined;
+}
 
 // ── preset file format (§5.4, portable, versioned) ──────────────────────────
-// A single-preset file: { v:1, name, params:{<path>:value} }
-// A bank file:          { v:1, type:'bank', presets:[{name,params}], last }
-// parsePresetFile returns { kind:'preset', name, params } or
-// { kind:'bank', presets:[{name,params}], last }. Unknown v → throws (so a
-// future format bump can be rejected cleanly instead of loading garbage).
+// A single-preset file: { v:1, name, params:{<path>:value}, instrument?:<id> }
+// A bank file:          { v:1, type:'bank', presets:[{name,params,instrument?}], last }
+// `instrument` is an optional known instrument id (see ui/js/instruments.js);
+// when a preset is recalled the host switches to it before restoring params.
+// parsePresetFile returns { kind:'preset', name, params, instrument? } or
+// { kind:'bank', presets:[{name,params,instrument?}], last }. Unknown v → throws
+// (so a future format bump can be rejected cleanly instead of loading garbage).
 export const PRESET_FILE_SCHEMA = 1;
 
 function normalizeParams(input) {
@@ -36,12 +44,21 @@ function normalizeParams(input) {
   return out;
 }
 
-export function serializePreset({ name = 'Preset', params = {} } = {}) {
-  return JSON.stringify({ v: PRESET_FILE_SCHEMA, name, params });
+export function serializePreset({ name = 'Preset', params = {}, instrument = undefined } = {}) {
+  const out = { v: PRESET_FILE_SCHEMA, name, params };
+  const inst = knownInstrument(instrument);
+  if (inst) out.instrument = inst;
+  return JSON.stringify(out);
 }
 
 export function serializeBank({ presets = [], last = '' } = {}) {
-  return JSON.stringify({ v: PRESET_FILE_SCHEMA, type: 'bank', presets, last });
+  const norm = presets.map((p) => {
+    const o = { name: (p && typeof p.name === 'string' && p.name) || 'Preset', params: p && p.params };
+    const inst = knownInstrument(p && p.instrument);
+    if (inst) o.instrument = inst;
+    return o;
+  });
+  return JSON.stringify({ v: PRESET_FILE_SCHEMA, type: 'bank', presets: norm, last });
 }
 
 export function parsePresetFile(text) {
@@ -55,6 +72,7 @@ export function parsePresetFile(text) {
     const presets = obj.presets.map((p) => ({
       name: (p && typeof p.name === 'string' && p.name) || 'Preset',
       params: normalizeParams(p && p.params),
+      instrument: knownInstrument(p && p.instrument),
     }));
     return { kind: 'bank', presets, last: typeof obj.last === 'string' ? obj.last : '' };
   }
@@ -62,6 +80,7 @@ export function parsePresetFile(text) {
     kind: 'preset',
     name: typeof obj.name === 'string' && obj.name ? obj.name : 'Imported Preset',
     params: normalizeParams(obj.params),
+    instrument: knownInstrument(obj.instrument),
   };
 }
 
@@ -71,7 +90,8 @@ function readStore(){
     const parsed = raw ? JSON.parse(raw) : null;
     if (parsed && parsed.v === PRESET_SCHEMA && Array.isArray(parsed.presets)){
       const presets = parsed.presets.filter((p) =>
-        p && typeof p.name === 'string' && p.name.length > 0 && p.params && typeof p.params === 'object');
+        p && typeof p.name === 'string' && p.name.length > 0 && p.params && typeof p.params === 'object')
+        .map((p) => ({ name: p.name, params: p.params, instrument: knownInstrument(p.instrument) }));
       return { v: PRESET_SCHEMA, presets, last: typeof parsed.last === 'string' ? parsed.last : '' };
     }
   } catch (_) { /* corrupt or blocked storage: start clean */ }
@@ -85,7 +105,7 @@ function writeStore(store){
 
 const round3 = (v) => Math.round(v * 1000) / 1000;
 
-export function mountPresets({ select, nameInput, saveButton, exportButton, importButton, importInput, controls, onStatus }){
+export function mountPresets({ select, nameInput, saveButton, exportButton, importButton, importInput, controls, onStatus, getInstrumentId, onRecallInstrument }){
   const store = readStore();
   const paths = [...controls.keys()].sort();
 
@@ -96,7 +116,8 @@ export function mountPresets({ select, nameInput, saveButton, exportButton, impo
       const v = c ? c.get() : undefined;
       if (typeof v === 'number' && Number.isFinite(v)) params[path] = round3(v);
     }
-    return params;
+    const inst = getInstrumentId ? knownInstrument(getInstrumentId()) : undefined;
+    return { params, instrument: inst };
   };
 
   // Captured at mount time, before the user touches a control: the shipped sound
@@ -130,29 +151,36 @@ export function mountPresets({ select, nameInput, saveButton, exportButton, impo
 
   const recall = (name) => {
     if (!name) return 0;
-    const params = name === '__factory'
+    const preset = name === '__factory'
       ? shipped
-      : (store.presets.find((p) => p.name === name) || {}).params;
+      : (store.presets.find((p) => p.name === name) || {});
+    const params = preset.params;
     if (!params) return 0;
+    // Switch instrument first so the rebuilt voice pool inherits the saved
+    // params (a later instrument.select would wipe the restored values).
+    const inst = preset.instrument;
+    if (inst && onRecallInstrument && inst !== (getInstrumentId ? getInstrumentId() : undefined)) {
+      onRecallInstrument(inst);
+    }
     const applied = applyParams(params);
     store.last = name;
     writeStore(store);
     if (nameInput) nameInput.value = name === '__factory' ? '' : name;
-    if (onStatus) onStatus(`${label(name)} · ${applied} params`);
+    if (onStatus) onStatus(`${label(name)} · ${applied} params${inst ? ` · ${inst}` : ''}`);
     return applied;
   };
 
   const save = () => {
     const typed = (nameInput && nameInput.value ? nameInput.value : '').trim().slice(0, 40);
     const name = typed || `Preset ${store.presets.length + 1}`;
-    const params = snapshot();
+    const { params, instrument } = snapshot();
     const existing = store.presets.find((p) => p.name === name);
-    if (existing) existing.params = params;
-    else store.presets.push({ name, params });
+    if (existing) { existing.params = params; existing.instrument = instrument; }
+    else store.presets.push({ name, params, instrument });
     const ok = writeStore(store);
     rebuild(name);
     if (nameInput) nameInput.value = name;
-    if (onStatus) onStatus(ok ? `saved ${name} · ${Object.keys(params).length} params` : `could not save ${name}`);
+    if (onStatus) onStatus(ok ? `saved ${name} · ${Object.keys(params).length} params${instrument ? ` · ${instrument}` : ''}` : `could not save ${name}`);
     return ok;
   };
 
@@ -175,11 +203,11 @@ export function mountPresets({ select, nameInput, saveButton, exportButton, impo
   };
 
   exportButton?.addEventListener('click', () => {
-    const params = snapshot();
+    const { params, instrument } = snapshot();
     const base = (nameInput && nameInput.value ? nameInput.value : 'preset')
       .trim().replace(/[^\w.-]+/g, '_') || 'preset';
-    download(`${base}.mbirapreset`, serializePreset({ name: (nameInput && nameInput.value) || 'Preset', params }));
-    if (onStatus) onStatus(`exported ${Object.keys(params).length} params`);
+    download(`${base}.mbirapreset`, serializePreset({ name: (nameInput && nameInput.value) || 'Preset', params, instrument }));
+    if (onStatus) onStatus(`exported ${Object.keys(params).length} params${instrument ? ` · ${instrument}` : ''}`);
   });
 
   importButton?.addEventListener('click', () => importInput?.click());
@@ -192,12 +220,14 @@ export function mountPresets({ select, nameInput, saveButton, exportButton, impo
       if (r.kind === 'bank') {
         for (const p of r.presets) {
           const ex = store.presets.find((q) => q.name === p.name);
-          if (ex) ex.params = p.params; else store.presets.push(p);
+          if (ex) { ex.params = p.params; ex.instrument = p.instrument; }
+          else store.presets.push({ name: p.name, params: p.params, instrument: p.instrument });
         }
         if (r.last) store.last = r.last;
       } else {
         const ex = store.presets.find((q) => q.name === r.name);
-        if (ex) ex.params = r.params; else store.presets.push({ name: r.name, params: r.params });
+        if (ex) { ex.params = r.params; ex.instrument = r.instrument; }
+        else store.presets.push({ name: r.name, params: r.params, instrument: r.instrument });
       }
       writeStore(store);
       rebuild(store.last && store.presets.some((p) => p.name === store.last) ? store.last : '__factory');

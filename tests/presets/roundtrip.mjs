@@ -40,7 +40,20 @@ threw = false;
 try { parsePresetFile(JSON.stringify({ v: 1, name: 'z', params: { a: 'b' } })); } catch { threw = true; }
 assert.ok(threw, 'all-invalid params must be rejected');
 
+// instrument id is preserved (and validated against known instruments)
+const withInst = { name: 'Dza Voice', params: { master: 0.7 }, instrument: 'mbira-dzavadzimu' };
+const pi = parsePresetFile(serializePreset(withInst));
+assert.equal(pi.instrument, 'mbira-dzavadzimu');
+
+// a bank preset carries its instrument
+const bankInst = parsePresetFile(serializeBank({ presets: [withInst], last: 'Dza Voice' }));
+assert.equal(bankInst.presets[0].instrument, 'mbira-dzavadzimu');
+
+// an unknown instrument id is dropped (never stored as something we'd switch to)
+const badInst = parsePresetFile(JSON.stringify({ v: 1, name: 'X', params: { master: 1 }, instrument: 'does-not-exist' }));
+assert.equal(badInst.instrument, undefined);
+
 // the exported schema constant matches what we parse against
 assert.equal(PRESET_FILE_SCHEMA, 1);
 
-console.log('preset-file roundtrip OK (single + bank, schema/v1, rejection paths)');
+console.log('preset-file roundtrip OK (single + bank, schema/v1, instrument persist, rejection paths)');

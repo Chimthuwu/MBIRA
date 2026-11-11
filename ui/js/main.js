@@ -111,6 +111,8 @@ mountPresets({
   importButton: $('#preset-import'),
   importInput: $('#preset-file'),
   controls,
+  getInstrumentId: () => currentInstrumentId,
+  onRecallInstrument: (id) => send({ v: 1, type: 'instrument.select', payload: { id } }),
   onStatus: (text) => { const s = $('#st-preset'); if (s) s.textContent = `Preset: ${text}`; },
 });
 
@@ -125,6 +127,7 @@ on('note.state', ({ note, on: isOn, velocity }) => kb.setHostNote(note, isOn, ve
 
 /* loaded instrument schematic → rebuild the tine field from real geometry */
 const instChip = $('#provisional') || document.querySelector('.provisional');
+let currentInstrumentId = 'mbira-dzavadzimu';
 const instrumentSelect = $('#instrument');
 if (instrumentSelect) {
   for (const inst of INSTRUMENTS) instrumentSelect.add(new Option(inst.label, inst.id));
@@ -134,6 +137,7 @@ if (instrumentSelect) {
 }
 on('instrument', (p) => {
   if (!p || !p.id) return;
+  currentInstrumentId = p.id;
   if (kb.setInstrument(p.id) && instChip) instChip.textContent = p.name || p.id;
   if (instrumentSelect) instrumentSelect.value = p.id;
 });
