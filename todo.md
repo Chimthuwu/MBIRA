@@ -7,6 +7,12 @@
 - [ ] **§5.4 still open:** block-atomic recall (sample-boundary swap instead of per-param ramp), instrument + `voices.max` persistence, and the native plugin-state round-trip.
 - [ ] **Still human-gated (no change):** relaunch `mbira-poc live` and ear-confirm P1 master taper / L-4 stereo / modal.* / brightness / presets by ear; fill `docs/manual-test-results.md` Parts A–D.
 
+## 2026-11-11 — runtime instrument selector
+
+- [x] **Instrument selector shipped.** WebView2 UI now has an Instrument dropdown (top bar, next to Save). Selecting one sends `instrument.select {id}`; the native host resolves id→path via `resolveInstrumentPath` and pushes an `Event::LoadInstrument` onto the same bounded service-thread queue as params. `dispatchEvent` reloads the DSP (`__mbira.loadInstrument`), rebuilds the schematic geometry (`g_geom`/`g_instGeom`), and reposts the geometry envelope so the tine field swaps live. Shared `applyInstrumentText`/`applyInstrumentGeometry` factored out of `loadInstrumentFromDisk` — startup and runtime now share one load path. Commit `ddfc417`.
+- [x] **Registry + test.** `src/native/main.cpp` maps `mbira-dzavadzimu`/`nyunga-nyunga` → the two instrument JSONs; `ui/js/instruments.js` is the UI source of truth; `tests/instruments/instrument-selector.test.mjs` asserts every selector id has a matching instrument JSON `id` and is wired into `npm test`. Gate green (instrument-selector OK, 2 instruments).
+- [ ] **Human to confirm:** relaunch `mbira-poc live`, pick the other instrument from the dropdown, confirm the tine field swaps and the new instrument's timbre is audible on the next strike.
+
 ## Environment report (2026-11-06)
 
 - OS: Windows 10 Pro 22H2, build 19045.7807. CPU: AMD Ryzen 5 3600 (6c/12t). RAM: 32 GB.
