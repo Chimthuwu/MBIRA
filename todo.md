@@ -14,6 +14,13 @@
 - [x] **Registry + test.** `src/native/main.cpp` maps `mbira-dzavadzimu`/`nyunga-nyunga` → the two instrument JSONs; `ui/js/instruments.js` is the UI source of truth; `tests/instruments/instrument-selector.test.mjs` asserts every selector id has a matching instrument JSON `id` and is wired into `npm test`. Gate green (instrument-selector OK, 2 instruments).
 - [ ] **Human to confirm:** relaunch `mbira-poc live`, pick the other instrument from the dropdown, confirm the tine field swaps and the new instrument's timbre is audible on the next strike.
 
+## 2026-11-11 — voice management test suite (M2 3.4 rest)
+
+- [x] **Steal-overflow + sustain test suite shipped** as `tests/dsp/voices.mjs`, wired into `npm test`. Renders through the REAL native renderer (`build-native/mbira-poc render` -> `build/dsp-bundle.js`), not a mock:
+  - **Steal path VERIFIED:** an 80-voice held chord (exceeds `POLYPHONY_CAP = 64`, `src/dsp/index.js:578`) renders with no NaN/Inf, peak 0.920 (limiter held, no clip), and audible energy mid-render (RMS -11.3 dBFS at 2-3 s) — proves the steal path keeps voices alive and the limiter holds under overload. A 64-voice at-cap case renders clean beside it. (The synthetic 80-key instrument is generated in-test and pointed at via `MBIRA_INSTRUMENT`; the shipped instruments have 15-24 keys, so they can't exceed the cap on their own.)
+  - **Sustain pedal: wired but audibly INERT (finding, not a test bug).** The event -> `__mbira.sustain` -> `sustainHeld` path is correct, but `cfg.adsr.sustain = 1.0` (`src/dsp/index.js:137`) makes `ampEnv = sus + (1-sus)*relEnv` a constant 1.0, so note-off never attenuates a voice — the tine rings freely regardless of the pedal. Measured on/off tail difference = 0.0 dB. The test asserts the pedal path renders safely and reports the difference as a WARN rather than a false pass.
+  - **Open:** make the sustain pedal audibly meaningful — needs a damper model so note-off attenuates a voice and the pedal holds it (mbira actually uses damping as a core technique, so this is musically relevant). Steal ORDER (released -> sustained -> newest) and real-time CPU are NOT asserted here; order needs live inspection, offline render time is only a coarse proxy.
+
 ## Environment report (2026-11-06)
 
 - OS: Windows 10 Pro 22H2, build 19045.7807. CPU: AMD Ryzen 5 3600 (6c/12t). RAM: 32 GB.
