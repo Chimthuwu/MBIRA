@@ -1,5 +1,12 @@
 # MBIRA todo.md
 
+## 2026-11-11 — VST3 brought current (user-escalated)
+
+- [x] **VST3 rebuilt against the current DSP bundle (damper model + 6-partial modal engine + modulators).** `build-vst3/generated/dsp_bundle.h` now regenerates from `build/dsp-bundle.js` at configure time, so the plugin always matches the shipped sound. Verified: both embedded instruments load and ring in the smoke host (dza −15.7 dBFS, nyunga −6.0 dBFS), deterministically across runs.
+- [x] **Instrument support + switching.** Both instruments are embedded as raw-string headers (`instrument_default.h.in` → `configure_file`) so the DAW needs no filesystem access. An `Instrument` parameter (0 = dzaVadzimu, 1 = nyunga-nyunga) on the EditController drives a runtime `LoadInstrument` via the same `jsStringLiteral` path as the standalone. Steinberg `validator` 47/47 tests pass.
+- [x] **Threading bug fixed (root cause of the silent/failed VST3).** The old bridge ran a service thread that evaluated JS (graph mutation) concurrently with `runtime->process()` on the audio thread — touching the choc QuickJS context / elem graph from two threads silently dropped voices (default instrument silent, flaky notes). Now `process()` pushes host events and drains+evaluates them on the audio thread before rendering. Commit `501af74`, pushed to `Chimthuwu/MBIRA`.
+- [ ] Human to load `build-vst3/vst3/MBIRA.vst3` in a DAW and confirm dzaVadzimu is the default and switching to nyunga-nyunga audibly swaps the timbre.
+
 ## 2026-11-11 — shipped 2026-11-10 WIP + §5.4 preset files
 
 - [x] **Committed the whole 2026-11-10 session** (was sitting uncommitted on `ui/visual-first-assignment`): 5 logical commits — DSP 6-partial modal engine, native scope tap + allowlist, single Play-page UI + mod strips + presets + visualizer, 20-case regression gate, docs/evidence. Verified before commit: `npm test` green (20 real-bundle renders match reference manifest; L-1 spread 0.16 dB, L-2 +10.6 dB, L-4 stereo 0.34) and native build compiles clean (GCC 16.2.0, ninja). Pushed to `Chimthuwu/MBIRA` via the Chimthuwu token. Commits `6d61c0d`..`11d4dcf`.
@@ -39,7 +46,7 @@
 - [x] M1: test-triggered notes; continuous param changes during sustained audio (4.2) - evidence/wav/param-sweep.wav
 - [x] M1: latency (120 notes, 128/256 blocks) and CPU (1/8/32/37 voices) measurements (4.3)
 - [x] M1: rendered WAVs + manifest (evidence/RECORDING-MANIFEST.md); how-to-run doc
-- [ ] M1: VST3 spike with exit conditions (4.4) + host-test checklist
+- [x] M1: VST3 spike with exit conditions (4.4) + host-test checklist — RE-DONE 2026-11-11: current bundle, both instruments, validator 47/47, smoke host deterministic (see top section).
 - [ ] M1: finish architecture-decision.md with verified licences (RtAudio/RtMidi/QuickJS/choc/VST3)
 - [ ] STOP after M1 and report (Part A section 1)
 
