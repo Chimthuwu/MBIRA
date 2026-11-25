@@ -5,6 +5,14 @@ import { mountFaders, mountKnobs, mountMeter, mountModStrips } from './controls.
 import { mountPresets } from './presets.js';
 import { mountVisualizer } from './visualizer.js';
 
+// TEMP DEBUG: surface any uncaught init error to the host log (build/liveui.log).
+window.addEventListener('error', (e) => {
+  try { send('error', { msg: e.message, stack: e.error && e.error.stack, file: e.filename, line: e.lineno }); } catch (_) {}
+});
+window.addEventListener('unhandledrejection', (e) => {
+  try { send('error', { msg: 'reject: ' + ((e.reason && e.reason.message) || e.reason) }); } catch (_) {}
+});
+
 /* ── dev mock host (design review without the native app) ──
    Mimics a telemetry frame, including the 1024-sample wave the real host
    sends, so the scope/spectrum/spectrogram run with no native app attached. */

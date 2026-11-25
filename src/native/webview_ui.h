@@ -418,6 +418,9 @@ inline int runWebView2(NoteSink noteSink, ParamSink paramSink, InstrumentSink in
       if (g_wv) g_wv->ExecuteScript(
           L"JSON.stringify({rs:document.readyState,href:location.href,"
           L"title:document.title,tines:document.querySelectorAll('.tine').length,"
+          L"inst:(function(){var s=document.querySelector('#instrument');return s?s.options.length:-1})(),"
+          L"scopeH:(function(){var c=document.querySelector('#scope');return c?c.clientHeight:-1})(),"
+          L"scopeW:(function(){var c=document.querySelector('#scope');return c?c.clientWidth:-1})(),"
           L"chrome:!!(window.chrome&&window.chrome.webview)})"
           , (ICoreWebView2ExecuteScriptCompletedHandler*)new ScriptHandler);
       return 0;
