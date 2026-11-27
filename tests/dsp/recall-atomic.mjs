@@ -127,4 +127,15 @@ for (const [desc, bad] of [
 const r2 = mbira.recall({ master: 0.25 });
 if (r2.applied !== 1) fail('valid recall after failed recalls did not apply');
 
+// voices.max: runtime voice-count persistence (§5.4). Pool starts at 64.
+const pool0 = vm.runInContext('globalThis.__mbira.getInstrument().keys.length', ctx);
+mbira.recall({ 'voices.max': 16 });
+const pool16 = vm.runInContext('globalThis.__mbira.getInstrument().keys.length', ctx);
+if (pool0 !== 64) fail(`voice pool did not start at 64 (got ${pool0})`);
+if (pool16 !== 16) fail(`voices.max did not shrink the pool (got ${pool16})`);
+mbira.recall({ 'voices.max': 64 });
+const pool64 = vm.runInContext('globalThis.__mbira.getInstrument().keys.length', ctx);
+if (pool64 !== 64) fail(`voices.max did not restore the pool (got ${pool64})`);
+console.log(`voices.max: pool 64 -> 16 -> 64 via recall OK`);
+
 console.log('recall-atomic OK — block-atomic recall lands within one block; validation before mutation; all 31 preset paths accepted');

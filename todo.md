@@ -15,7 +15,7 @@
 - [ ] **§5.4 still open (split 2026-11-27):**
   - [x] native plugin-state round-trip: `MbiraProcessor::getState/setState` implemented (chunk magic 'MBST' v1 = instrument index + reserved param-pair list; validation on read; pending instrument wins over the default at next engine build) + `MbiraController::setComponentState` syncs the Instrument param. Steinberg validator 47/47 (includes state save/restore) + smoke host deterministic (dza −15.7 dBFS, nyunga −6.0 dBFS).
   - [x] block-atomic recall: `__mbira.recall(params)` validates all entries, applies all, and re-renders once with bare consts (sample-boundary swap, no per-param ramp) — verified 23 dB separation vs the ramped param path in the 15-40 ms window (`tests/dsp/recall-atomic.mjs`, in `npm test`); native render path has a `recall` event; live UI recall sends ONE `preset.recall` message (silent control repaints) and the WebView2 host maps it to `__mbira.recall`. Live ear-confirm folds into the next human `mbira-poc live` session.
-  - [ ] `voices.max` persistence (needs a new runtime voice-count capability first — pool is build-time fixed).
+  - [x] `voices.max` persistence: the runtime voice-count capability already existed as `__mbira.configurePool(n)` (CPU-test helper) — `voices.max` is now a real DSP param (int, clamped 8..64) that drives it, accepted by `setParam` and `recall`, and `configurePool` is symmetric (grows the pool back by re-creating states) so a recall restores 64. Verified 64→16→64 via recall (`tests/dsp/recall-atomic.mjs`, in `npm test`). UI surface (a visible voices.max control in the Play page) is the remaining cosmetic piece; the engine + preset path is complete.
 - [!] **Still human-gated (no change):** relaunch `mbira-poc live` and ear-confirm P1 master taper / L-4 stereo / modal.* / brightness / presets by ear; fill `docs/manual-test-results.md` Parts A–D. [HUMAN-GATED: needs a person with ears/DAW - agent cannot listen]
 
 ## 2026-11-11 — runtime instrument selector
@@ -105,11 +105,11 @@
   `evidence/standalone/native-host.png`. **Provisional:** `blend.engine`,
   `fx.*`, `layer.*`, `mode1-3` have no DSP `setParam` case — UI-only for now
   (logged once as provisional; adding them = sound-generation work, locked).
-- [ ] Open questions still blocking UI (see `ui/README.md`): real tunings (4.9 — HUMAN,
+- [!] Open questions still blocking UI (see `ui/README.md`): real tunings (4.9 — HUMAN,
   amendment 4.9 asks the human for real tunings before M3) and MIDI status semantics
   (HUMAN — semantics of ok/warn with zero devices is a product question for the owner).
   RESOLVED 2026-11-27: voice-count display (status bar now shows the real pool cap 64,
-  decision checkpoint 8af955a).
+  decision checkpoint 8af955a). [HUMAN-GATED: needs the owner's tunings/semantics]
 - Note: separate native `src/native/ui.h` (uncommitted WIP, `mbira_ui::State`
   wired into `main.cpp` live MIDI path) exists alongside this WebView2 UI —
   they are independent; `src/dsp/index.js` currently gutted to a 1-line
@@ -221,7 +221,7 @@
       (e.g. -60..+6 dB, default -6), A/B render before/after to prove loudness now tracks the fader.
       Verify with evidence/wav-listen-style measurements (peak + RMS vs fader position).
       DONE 2026-11-10 (power taper p^2.5 instead of linear-in-dB — see the 2026-11-10 section).
-- [ ] **P2 — "none of the other controls do shit".** Two distinct causes:
+- [x] **P2 — "none of the other controls do shit".** DONE 2026-11-10 (see P2a/P2b items below and the 2026-11-10 section): dead controls removed/disabled (P2a); live param path verified end-to-end with no DSP defect (P2b).
       a) Knobs with NO DSP at all: `mode1/2/3` (partial mix), `fx.reverb.decay`, `fx.delay.feedback`,
          `fx.drive.warmth`, `fx.spatial.width` (ui/index.html:105-222). Host correctly logs them as
          provisional (webview_ui.h:274 dspAccepts list + :302 warning). Decide: implement in DSP (mode mix is

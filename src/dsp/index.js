@@ -748,6 +748,13 @@ function applyParam(name, value) {
     case 'modal.decay': cfg.modal.decay = Math.max(0.0, Math.min(1.0, value)); break;
     case 'exciter.noise': cfg.exciter.noise = Math.max(0.0, Math.min(1.0, value)); break;
     case 'exciter.hardness': cfg.exciter.hardness = Math.max(0.0, Math.min(1.0, value)); break;
+    // §5.4 voices.max: runtime voice-count (pool is prebuilt 48..111 = 64; this
+    // shrinks/keeps the first N notes). Rounds to an int, clamped 8..64.
+    case 'voices.max': {
+      const n = Math.max(8, Math.min(64, Math.round(value)));
+      configurePool(n);
+      break;
+    }
     default: {
       // per-parameter mod strips (UI): mod.<target>.<source>, depth -1..1
       const m = /^mod\.(geometry|material|decay|pluck|noise|hardness)\.(vel|key|rnd)$/.exec(name);
@@ -775,7 +782,7 @@ function applyParam(name, value) {
 // tests/dsp/recall-atomic.mjs, which recalls every preset-registry path).
 const RECALLABLE = new Set([
   'master', 'pluckPos', 'soundboard', 'gourdAmount', 'gourdFreq', 'buzzIntensity', 'buzzChar',
-  'adsr.attack', 'adsr.release', 'adsr.sustain', 'lfo.rate',
+  'adsr.attack', 'adsr.release', 'adsr.sustain', 'lfo.rate', 'voices.max',
   'mod.lfoToMaster', 'mod.lfoToPitch', 'random.amount', 'vel.amp', 'vel.bright',
   'macro.resonance', 'macro.buzz', 'macro.brightness',
   'modal.geometry', 'modal.material', 'modal.decay', 'exciter.noise', 'exciter.hardness',
@@ -850,11 +857,14 @@ function configureSampleRate(sr) {
   renderAll(); // rebuilds; Nyquist suppression re-evaluated per mode
 }
 
-// CPU-test helper: shrink the prebuilt voice pool to N notes.
+// CPU-test helper / §5.4 voices.max: set the prebuilt voice pool to N notes.
+// Symmetric: grows back by re-creating deleted states (ensureState), so a
+// voices.max recall can restore 64 after shrinking.
 function configurePool(n) {
   const keep = new Set();
   for (let i = 0; i < n; ++i) keep.add(POOL_MIN + i);
   for (const k of [...voiceState.keys()]) if (!keep.has(k)) voiceState.delete(k);
+  for (const k of keep) if (!voiceState.has(k)) ensureState(k);
   renderAll();
 }
 
