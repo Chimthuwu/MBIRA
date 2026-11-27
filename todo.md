@@ -5,7 +5,7 @@
 - [x] **VST3 rebuilt against the current DSP bundle (damper model + 6-partial modal engine + modulators).** `build-vst3/generated/dsp_bundle.h` now regenerates from `build/dsp-bundle.js` at configure time, so the plugin always matches the shipped sound. Verified: both embedded instruments load and ring in the smoke host (dza −15.7 dBFS, nyunga −6.0 dBFS), deterministically across runs.
 - [x] **Instrument support + switching.** Both instruments are embedded as raw-string headers (`instrument_default.h.in` → `configure_file`) so the DAW needs no filesystem access. An `Instrument` parameter (0 = dzaVadzimu, 1 = nyunga-nyunga) on the EditController drives a runtime `LoadInstrument` via the same `jsStringLiteral` path as the standalone. Steinberg `validator` 47/47 tests pass.
 - [x] **Threading bug fixed (root cause of the silent/failed VST3).** The old bridge ran a service thread that evaluated JS (graph mutation) concurrently with `runtime->process()` on the audio thread — touching the choc QuickJS context / elem graph from two threads silently dropped voices (default instrument silent, flaky notes). Now `process()` pushes host events and drains+evaluates them on the audio thread before rendering. Commit `501af74`, pushed to `Chimthuwu/MBIRA`.
-- [ ] Human to load `build-vst3/vst3/MBIRA.vst3` in a DAW and confirm dzaVadzimu is the default and switching to nyunga-nyunga audibly swaps the timbre.
+- [!] Human to load `build-vst3/vst3/MBIRA.vst3` in a DAW and confirm dzaVadzimu is the default and switching to nyunga-nyunga audibly swaps the timbre. [HUMAN-GATED: needs a person with ears/DAW - agent cannot listen]
 
 ## 2026-11-11 — shipped 2026-11-10 WIP + §5.4 preset files
 
@@ -14,15 +14,15 @@
 - [x] **§5.4 instrument persistence DONE:** a saved/exported preset now carries the loaded instrument id and recall re-selects it (before restoring knobs) via the same instrument.select path. Validated against the INSTRUMENTS registry. Commit `9745c47`.
 - [ ] **§5.4 still open (split 2026-11-27):**
   - [x] native plugin-state round-trip: `MbiraProcessor::getState/setState` implemented (chunk magic 'MBST' v1 = instrument index + reserved param-pair list; validation on read; pending instrument wins over the default at next engine build) + `MbiraController::setComponentState` syncs the Instrument param. Steinberg validator 47/47 (includes state save/restore) + smoke host deterministic (dza −15.7 dBFS, nyunga −6.0 dBFS).
-  - [ ] block-atomic recall (sample-boundary swap instead of per-param ramp);
+  - [x] block-atomic recall: `__mbira.recall(params)` validates all entries, applies all, and re-renders once with bare consts (sample-boundary swap, no per-param ramp) — verified 23 dB separation vs the ramped param path in the 15-40 ms window (`tests/dsp/recall-atomic.mjs`, in `npm test`); native render path has a `recall` event; live UI recall sends ONE `preset.recall` message (silent control repaints) and the WebView2 host maps it to `__mbira.recall`. Live ear-confirm folds into the next human `mbira-poc live` session.
   - [ ] `voices.max` persistence (needs a new runtime voice-count capability first — pool is build-time fixed).
-- [ ] **Still human-gated (no change):** relaunch `mbira-poc live` and ear-confirm P1 master taper / L-4 stereo / modal.* / brightness / presets by ear; fill `docs/manual-test-results.md` Parts A–D.
+- [!] **Still human-gated (no change):** relaunch `mbira-poc live` and ear-confirm P1 master taper / L-4 stereo / modal.* / brightness / presets by ear; fill `docs/manual-test-results.md` Parts A–D. [HUMAN-GATED: needs a person with ears/DAW - agent cannot listen]
 
 ## 2026-11-11 — runtime instrument selector
 
 - [x] **Instrument selector shipped.** WebView2 UI now has an Instrument dropdown (top bar, next to Save). Selecting one sends `instrument.select {id}`; the native host resolves id→path via `resolveInstrumentPath` and pushes an `Event::LoadInstrument` onto the same bounded service-thread queue as params. `dispatchEvent` reloads the DSP (`__mbira.loadInstrument`), rebuilds the schematic geometry (`g_geom`/`g_instGeom`), and reposts the geometry envelope so the tine field swaps live. Shared `applyInstrumentText`/`applyInstrumentGeometry` factored out of `loadInstrumentFromDisk` — startup and runtime now share one load path. Commit `ddfc417`.
 - [x] **Registry + test.** `src/native/main.cpp` maps `mbira-dzavadzimu`/`nyunga-nyunga` → the two instrument JSONs; `ui/js/instruments.js` is the UI source of truth; `tests/instruments/instrument-selector.test.mjs` asserts every selector id has a matching instrument JSON `id` and is wired into `npm test`. Gate green (instrument-selector OK, 2 instruments).
-- [ ] **Human to confirm:** relaunch `mbira-poc live`, pick the other instrument from the dropdown, confirm the tine field swaps and the new instrument's timbre is audible on the next strike.
+- [!] **Human to confirm:** relaunch `mbira-poc live`, pick the other instrument from the dropdown, confirm the tine field swaps and the new instrument's timbre is audible on the next strike. [HUMAN-GATED: needs a person with ears/DAW - agent cannot listen]
 
 ## 2026-11-11 — voice management test suite (M2 3.4 rest)
 
@@ -157,12 +157,12 @@
       note labels, dynamic QWERTY map (Q-P / A-L / Z-B), host posts `instrument` envelope on ui.ready.
       Visual review pass: initial flat grid -> 9/10 (24 tines confirmed interleaved, click fires note.on through the bridge).
       Note: instrument JSON geometry is still PROVISIONAL (spec 4.3) - layout updates automatically when tunings/coords land.
-- [ ] **BLOCKED ON A HUMAN: listen to `evidence/wav-listen/` (re-render 2) and fill in `docs/manual-test-results.md`.**
+- [!] **BLOCKED ON A HUMAN: listen to `evidence/wav-listen/` (re-render 2) and fill in `docs/manual-test-results.md`.** [HUMAN-GATED: needs a person with ears/DAW - agent cannot listen]
 - [x] (2026-11-09) HUMAN VERDICT (live session, user): "sounds and looks fine" - Milestone L listening gate SATISFIED.
       New findings from that session (prepared, not yet executed - see "Next" below): dead controls; master fader clips at ~30%.
-- [ ] Remaining logged defects: L-3 instruments differ by decay only, not tuning (amendment 4.9 real tunings),
+- [!] Remaining logged defects: L-3 instruments differ by decay only, not tuning (amendment 4.9 real tunings), [HUMAN-GATED: needs a person with ears/DAW - agent cannot listen]
       L-4 no stereo image (mono-summed body chain).
-- [ ] This satisfies `todo.md` M1 STOP + spec 8 gate **only after the human records the result.**
+- [!] This satisfies `todo.md` M1 STOP + spec 8 gate **only after the human records the result.** [HUMAN-GATED: needs a person with ears/DAW - agent cannot listen]
       No further UI / modulation / sample / FX / VST3 work before then (spec 0, spec 8). [SATISFIED 2026-11-09 - gate open]
 
 ## 2026-11-10 — ground truth + P1/P2 (executed)
@@ -206,10 +206,10 @@
       `docs/how-to-run.md` control/modulator sections corrected (no mod-matrix UI, ratio-set story and
       fader reality); `docs/manual-test-results.md` header/defect refs updated and a post-2026-11-09
       fixes note added (Parts A-D still blank — needs the human).
-- [ ] Re-run the live-session test notes with the user (docs/manual-test-results.md Part B) on the
+- [!] Re-run the live-session test notes with the user (docs/manual-test-results.md Part B) on the [HUMAN-GATED: needs a person with ears/DAW - agent cannot listen]
       new UI/build; confirm the fader feels proportional and the stereo image is audible (objective
       numbers are offline; the rebuilt `mbira-poc` must be relaunched to hear P1/L-4).
-- [ ] `docs/manual-test-results.md` Parts A-D still blank (needs the human).
+- [!] `docs/manual-test-results.md` Parts A-D still blank (needs the human). [HUMAN-GATED: needs a person with ears/DAW - agent cannot listen]
 
 ## Next — originally prepared 2026-11-09 (P1 and P2a now executed, see above)
 
@@ -235,7 +235,7 @@
          Log per-param A/B evidence (render with MBIRA_RATIOSET-style param events) before claiming any fix.
 - [x] P2a DONE 2026-11-10 (fx/mode removed; blend/preset/layers disabled); P2b DONE 2026-11-10
       (no DSP defect found — evidence in the 2026-11-10 section).
-- [ ] After P1/P2: re-run the live-session test notes (docs/manual-test-results.md Part B) with the user.
+- [!] After P1/P2: re-run the live-session test notes (docs/manual-test-results.md Part B) with the user. [HUMAN-GATED: needs a person with ears/DAW - agent cannot listen]
 
 ## 2026-11-10 (latest) — live distortion + master placement + small-UI labels
 
@@ -255,7 +255,7 @@
       macro row. The same controls stay visible at every width; only spacing/type scale.
       Knob rows no longer squash (`flex:0 0 auto`, `align-content:start`) — that squashing
       was what clipped the knob labels when the window was short.
-- [ ] User to relaunch `mbira-poc live` (bundle loads at host start) and confirm by ear;
+- [!] User to relaunch `mbira-poc live` (bundle loads at host start) and confirm by ear; [HUMAN-GATED: needs a person with ears/DAW - agent cannot listen]
       then Part B live notes.
 
 ## 2026-11-10 (later) — physical model: 6-partial modal engine + exciter
@@ -295,7 +295,7 @@ physical-modelling controls instead of the sample layer.
       bundle `fd36b122705b`, `npm test` green.
 - [x] **Listening pack re-render 7** (13 WAVs + manifest): all defaults now render the
       6-partial model; loudest file `ny-hard` at −3.04 dBFS peak, no clipping.
-- [ ] User to relaunch `mbira-poc live` and try Geometry / Material / Decay / Strike
+- [!] User to relaunch `mbira-poc live` and try Geometry / Material / Decay / Strike [HUMAN-GATED: needs a person with ears/DAW - agent cannot listen]
       Noise by ear. Only the compiled host + DSP bundle changed, so a fresh launch is
       required to hear any of this.
 
@@ -336,7 +336,7 @@ strips in a Pigments idiom, and replace the mocked scope with real audio.
       `param.set mod.decay.vel` reaches the DSP, and a real tine strike lights the
       scope from host samples.
 - [x] Docs updated (`docs/how-to-run.md`: Play page, strip params, visualizer tap).
-- [ ] User to relaunch `mbira-poc live` (the exe and bundle both changed).
+- [!] User to relaunch `mbira-poc live` (the exe and bundle both changed). [HUMAN-GATED: needs a person with ears/DAW - agent cannot listen]
 
 ## 2026-11-10 (later still) — free-running LFO as a fourth mod strip source
 
@@ -364,7 +364,7 @@ strips in a Pigments idiom, and replace the mocked scope with real audio.
       removed, must ripple 3.6 dB with >= 3 sign changes at depth 1 and < 1 dB at
       depth 0. CDP: 21 strips with the right source sets, slider sends
       `lfo.rate 2.5`, keyboard strip sends `mod.geometry.lfo 1`, no console errors.
-- [ ] User to relaunch `mbira-poc live` (exe + bundle both changed again).
+- [!] User to relaunch `mbira-poc live` (exe + bundle both changed again). [HUMAN-GATED: needs a person with ears/DAW - agent cannot listen]
 
 ## 2026-11-10 (later still) — presets capture the knobs and mod strip depths
 
@@ -420,7 +420,7 @@ Two things reported from actually using the app.
       1200x700, 1400x781 all fit; at the real 741x528 the boxes are topbar 60 /
       hero 118 / view 328 / status 22 with the modal panel at 372x242 and the
       scope canvas at 325x102. Only <=620 px wide (single column) still scrolls.
-- [ ] Not seen by eye on the compact layout (CSS work verified by measuring
+- [!] Not seen by eye on the compact layout (CSS work verified by measuring [HUMAN-GATED: needs a person with ears/DAW - agent cannot listen]
       boxes, no screenshot). Spectrum + spectrogram were re-checked at the small
       canvas size only by a quick probe that read 0 bright px — the scope was
       verified (1119 px of trace); re-check those two modes when convenient.
@@ -452,7 +452,7 @@ Two things reported from actually using the app.
       Gate is 20 renders and green.
 - [x] UI copy no longer says "applies to the next notes you play"; the tooltip
       and the Play-page sentence describe the live tilt.
-- [ ] Not confirmed by ear - measured only. If it now sounds too EQ-ish at the
+- [!] Not confirmed by ear - measured only. If it now sounds too EQ-ish at the [HUMAN-GATED: needs a person with ears/DAW - agent cannot listen]
       extremes, ±6 dB at 1.6 kHz is the obvious dial to turn down.
 
 ## Decisions made (review me)
