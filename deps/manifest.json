@@ -4,7 +4,11 @@
       "name": "elementary (vendored clone, git-ignored; tracked by commit)",
       "repo": "https://github.com/elemaudio/elementary",
       "commit": "60e7234",
-      "jsPackages": { "@elemaudio/core": "4.0.1", "@elemaudio/web-renderer": "4.0.3", "@elemaudio/offline-renderer": "4.0.3" },
+      "jsPackages": {
+        "@elemaudio/core": "4.0.1",
+        "@elemaudio/web-renderer": "4.0.3",
+        "@elemaudio/offline-renderer": "4.0.3"
+      },
       "nativeCMakeVersion": "0.11.5",
       "licence": "MIT (Copyright (c) 2023 Nick Thompson) — verified from repo LICENSE"
     },
@@ -37,5 +41,20 @@
       "licence": "BSD-3-Clause ( choc/single_include LICENCE) — verify before distribution"
     }
   ],
-  "toolchain": { "cmake": "4.4.3", "ninja": "via AppData Python311 Scripts", "node": "26.0.0", "npm": "11.12.1" }
+  "toolchain": {
+    "cmake": "4.4.3",
+    "ninja": "via AppData Python311 Scripts",
+    "node": "26.0.0",
+    "npm": "11.12.1"
+  },
+  "webview2NativeBuildArtifacts": {
+    "why": "deps/extract/ is gitignored; a fresh tree (or the 2026-11 repo move) loses these two artifacts and `cmake --build build-native --target mbira-poc` fails: missing WebView2.h, then missing WebView2Loader.dll.lib",
+    "regenerate_headers": "unzip deps/extract/webview2/wv2.nupkg 'build/native/include/*' -d deps/extract/webview2/sdk/",
+    "regenerate_import_lib": "cd deps/extract/webview2/sdk/build/native/x64 && cp ../../../runtimes/win-x64/native/WebView2Loader.dll . && gendef WebView2Loader.dll && dlltool -d WebView2Loader.def -D WebView2Loader.dll -l WebView2Loader.dll.lib -m i386:x86-64",
+    "expected_paths": [
+      "deps/extract/webview2/sdk/build/native/include/WebView2.h",
+      "deps/extract/webview2/sdk/build/native/x64/WebView2Loader.dll.lib"
+    ],
+    "verified": "2026-11-27 (native host rebuilt after regeneration)"
+  }
 }

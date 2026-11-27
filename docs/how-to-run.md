@@ -9,7 +9,8 @@
 
 ```bash
 # 1. DSP bundle (JS graph -> single QuickJS script)
-npm install
+npm install                # REQUIRED before npm test: without node_modules the
+                           # gate fails with ERR_MODULE_NOT_FOUND '@elemaudio/core'
 npm run build:dsp          # -> build/dsp-bundle.js
 
 # 2. Native host (MinGW on PATH so CMake finds gcc)
