@@ -196,7 +196,7 @@ static bool applyInstrumentGeometry(const std::string& text) {
                (float) k["lengthPx"].get<double>());
       o += row;
     }
-    o += "]}}";
+    o += "],\"voicesCap\":64}}";
     g_instGeom = std::move(o);
   }
   return true;

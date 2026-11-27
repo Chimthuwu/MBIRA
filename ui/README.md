@@ -75,8 +75,9 @@ ui/
 
 - Real tunings (4.9) — until these land, the keyboard's note labels are wrong
   and any pitch-layout decision is provisional.
-- Voice pool display — status bar says 0 / 37; confirm whether M2's 64 should
-  be user-visible or advanced-only.
+- ~~Voice pool display~~ — RESOLVED 2026-11-27: status bar shows the real pool
+  cap (64) delivered in the instrument envelope (`voicesCap`); decision recorded
+  in todo.md 'Decisions made' (checkpoint 8af955a).
 - MIDI status semantics — what does "ok" mean when zero devices are present
   vs. a device present but no notes received? The dot currently only has
   ok/warn.

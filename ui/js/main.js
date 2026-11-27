@@ -146,6 +146,7 @@ if (instrumentSelect) {
 on('instrument', (p) => {
   if (!p || !p.id) return;
   currentInstrumentId = p.id;
+  if (p.voicesCap) $('#st-voices-cap').textContent = String(p.voicesCap);
   if (kb.setInstrument(p.id) && instChip) instChip.textContent = p.name || p.id;
   if (instrumentSelect) instrumentSelect.value = p.id;
 });
