@@ -52,5 +52,6 @@ if (host()){
     dispatch(typeof e.data === 'string' ? JSON.parse(e.data) : e.data));
 }
 
-// Exposed so the dev mock (main.js) can push fake telemetry
-window.__MBIRA_DISPATCH__ = dispatch;
+// Exposed so the dev mock (main.js) can push fake telemetry. Guarded so the
+// pure serialize/parse imports (tests/presets/roundtrip.mjs) stay Node-clean.
+if (typeof window !== 'undefined') window.__MBIRA_DISPATCH__ = dispatch;
