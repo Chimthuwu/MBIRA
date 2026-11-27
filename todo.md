@@ -105,8 +105,11 @@
   `evidence/standalone/native-host.png`. **Provisional:** `blend.engine`,
   `fx.*`, `layer.*`, `mode1-3` have no DSP `setParam` case — UI-only for now
   (logged once as provisional; adding them = sound-generation work, locked).
-- [ ] Open questions still blocking UI (see `ui/README.md`): real tunings (4.9),
-  voice-count display (37 vs M2 64), MIDI status semantics.
+- [ ] Open questions still blocking UI (see `ui/README.md`): real tunings (4.9 — HUMAN,
+  amendment 4.9 asks the human for real tunings before M3) and MIDI status semantics
+  (HUMAN — semantics of ok/warn with zero devices is a product question for the owner).
+  RESOLVED 2026-11-27: voice-count display (status bar now shows the real pool cap 64,
+  decision checkpoint 8af955a).
 - Note: separate native `src/native/ui.h` (uncommitted WIP, `mbira_ui::State`
   wired into `main.cpp` live MIDI path) exists alongside this WebView2 UI —
   they are independent; `src/dsp/index.js` currently gutted to a 1-line
@@ -455,3 +458,4 @@ Two things reported from actually using the app.
 ## Decisions made (review me)
 
 - 2026-11-27 — L121 modulator-matrix design vs identity lock (L126: NO matrix/Mod page, ever): followed the identity lock; designed the augmented sample-layer engine only (docs/design-augmented-engine.md). Checkpoint ff2b2992932401c32322c43567922dedc8db6c81.
+- 2026-11-27 — Voice-pool display in status bar: show the real pool cap 64 (honest UI, matches identity-lock principle; cap is build-time fixed). Checkpoint 8af955a1f0bec6a8d4b8daf55270db242d6c65be.
