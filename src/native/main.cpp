@@ -307,6 +307,12 @@ static void runRender(Engine& eng, const std::string& wavPath,
     }
     else if (type == "sustain") { ev.kind = Event::Sustain; ev.value = (float) e["value"].get<double>(); }
     else if (type == "alldamp") { ev.kind = Event::AllDamp; }
+    else if (type == "recall") {
+      // Block-atomic preset recall: {t, type:"recall", params:{path:value,...}}
+      // -> one __mbira.recall(...) call (validate-all + one instant re-render).
+      ev.kind = Event::Raw;
+      ev.name = "__mbira.recall(" + choc::json::toString (e["params"]) + ")";
+    }
     else if (type == "trigger") { ev.kind = Event::AllDamp; ev.note = -1; } // debug: calls __mbira.trigger()
     else { fprintf(stderr, "ERROR: unknown event type %s\n", type.c_str()); exit(1); }
     events.push_back(ev);

@@ -323,6 +323,9 @@ function hash01(note, trig) {
 // Smoothed keyed const: SET_PROPERTY steps become ~30 ms ramps (click-free
 // body-chain parameter changes; voice-side params are smoothed in-graph too).
 function smoothConst(key, value, tau = 0.03) {
+  // Block-atomic recall: during a recall render the consts bypass el.smooth so
+  // the new values land on the next block instead of ramping per param.
+  if (recallMode) return el.const({ key, value });
   return el.smooth(el.tau2pole(tau), el.const({ key, value }));
 }
 
@@ -708,6 +711,16 @@ function sustain(pedalDown) {
 }
 
 function setParam(name, value) {
+  applyParam(name, value);
+  renderAll();
+}
+
+// Applies one named param to cfg WITHOUT re-rendering. Throws on unknown names
+// and non-finite values. Shared by setParam (live knob moves, smoothed) and
+// recall (block-atomic preset restore, instant).
+function applyParam(name, value) {
+  if (typeof value !== 'number' || !Number.isFinite(value))
+    throw new Error(`param ${name}: value must be a finite number`);
   switch (name) {
     case 'master': cfg.master = Math.max(0.0, Math.min(1.0, value)); break;
     case 'pluckPos': cfg.pluckPos = value; break;
@@ -746,7 +759,51 @@ function setParam(name, value) {
       break;
     }
   }
-  renderAll();
+}
+
+// ---- block-atomic recall (§5.4) ---------------------------------------------
+// A preset recall used to stream one param.set per value: 32 live setParam
+// calls, each re-rendering the graph and ramping its const over the smooth
+// tau — the sound drifts toward the preset over ~30 ms per param. recall()
+// validates every value FIRST, applies them all to cfg, then re-renders ONCE
+// with recallMode set, which builds the const nodes WITHOUT el.smooth — every
+// const lands at its new value on the next audio block, sample-boundary swap,
+// no ramp, no click cascade (the graph is rebuilt, not mutated mid-block).
+
+// Names applyParam accepts, for validate-before-mutate in recall(). KEEP IN
+// SYNC with the setParam/applyParam switch above (drift is caught by
+// tests/dsp/recall-atomic.mjs, which recalls every preset-registry path).
+const RECALLABLE = new Set([
+  'master', 'pluckPos', 'soundboard', 'gourdAmount', 'gourdFreq', 'buzzIntensity', 'buzzChar',
+  'adsr.attack', 'adsr.release', 'adsr.sustain', 'lfo.rate',
+  'mod.lfoToMaster', 'mod.lfoToPitch', 'random.amount', 'vel.amp', 'vel.bright',
+  'macro.resonance', 'macro.buzz', 'macro.brightness',
+  'modal.geometry', 'modal.material', 'modal.decay', 'exciter.noise', 'exciter.hardness',
+  'mod.geometry.vel', 'mod.geometry.key', 'mod.geometry.rnd', 'mod.geometry.lfo',
+  'mod.material.vel', 'mod.material.key', 'mod.material.rnd', 'mod.material.lfo',
+  'mod.decay.vel', 'mod.decay.key', 'mod.decay.rnd', 'mod.decay.lfo',
+  'mod.pluck.vel', 'mod.pluck.key', 'mod.pluck.rnd',
+  'mod.noise.vel', 'mod.noise.key', 'mod.noise.rnd',
+  'mod.hardness.vel', 'mod.hardness.key', 'mod.hardness.rnd',
+]);
+
+let recallMode = false; // while true, smoothConst emits bare consts (instant)
+
+function recall(params) {
+  if (!params || typeof params !== 'object' || Array.isArray(params))
+    throw new Error('recall: params must be a {path: value} object');
+  const names = Object.keys(params);
+  if (names.length === 0) return { applied: 0 };
+  // Validate every entry BEFORE mutating cfg (same discipline as loadInstrument).
+  for (const n of names) {
+    if (!RECALLABLE.has(n)) throw new Error(`recall: unknown param: ${n}`);
+    if (typeof params[n] !== 'number' || !Number.isFinite(params[n]))
+      throw new Error(`recall: param ${n}: value must be a finite number`);
+  }
+  for (const n of names) applyParam(n, params[n]);
+  recallMode = true;
+  try { renderAll(); } finally { recallMode = false; }
+  return { applied: names.length };
 }
 
 // Compatibility with M1 events/tests: mode gains are an alias that scales the
@@ -808,5 +865,5 @@ renderAll();
 globalThis.__mbira = {
   noteOn, noteOff, sustain, setParam, setModeGain, setRatioSet,
   setTineOverride, allNotesDamp, configureSampleRate, configurePool,
-  loadInstrument, getInstrument,
+  loadInstrument, getInstrument, recall,
 };
