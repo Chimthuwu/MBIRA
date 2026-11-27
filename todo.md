@@ -47,8 +47,8 @@
 - [x] M1: latency (120 notes, 128/256 blocks) and CPU (1/8/32/37 voices) measurements (4.3)
 - [x] M1: rendered WAVs + manifest (evidence/RECORDING-MANIFEST.md); how-to-run doc
 - [x] M1: VST3 spike with exit conditions (4.4) + host-test checklist — RE-DONE 2026-11-11: current bundle, both instruments, validator 47/47, smoke host deterministic (see top section).
-- [ ] M1: finish architecture-decision.md with verified licences (RtAudio/RtMidi/QuickJS/choc/VST3)
-- [ ] STOP after M1 and report (Part A section 1)
+- [x] M1: finish architecture-decision.md with verified licences (RtAudio/RtMidi/QuickJS/choc/VST3) — VERIFIED 2026-11-27: doc complete (M0 verdict + M1 gate evidence); LICENSES.md covers Elementary/choc/QuickJS/RtAudio/RtMidi verified + VST3 dual licence flagged for the human.
+- [x] STOP after M1 and report (Part A section 1) — done, see "Final status (2026-11-06)" below.
 
 ## Amendments 4.5-4.9 (later milestones - record now, apply then)
 
