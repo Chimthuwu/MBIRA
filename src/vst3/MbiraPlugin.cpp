@@ -22,6 +22,7 @@
 #include "pluginterfaces/vst/ivstevents.h"
 #include "pluginterfaces/vst/ivstprocesscontext.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
+#include "pluginterfaces/base/ibstream.h"
 
 #include <chrono>
 
@@ -32,6 +33,11 @@ using namespace Steinberg::Vst;
 
 // Instrument parameter id. 0 = dzaVadzimu (default), 1 = nyunga-nyunga.
 static const Vst::ParamID kInstrumentParamId = 1001;
+
+// Embedded instrument JSON by index (0 = dzaVadzimu, 1 = nyunga-nyunga).
+static std::string jsonForInstrument (int idx) {
+  return idx == 1 ? getMbiraNyungaJson () : getMbiraDzaJson ();
+}
 
 // ---------------------------------------------------------------------------
 // Processor
@@ -99,6 +105,8 @@ public:
             pq->getParameterId () == kInstrumentParamId) {
           MbiraEvent ev; ev.kind = MbiraEvent::LoadInstrument;
           ev.text = (v < 0.5) ? getMbiraDzaJson () : getMbiraNyungaJson ();
+          currentInstrument = (v < 0.5) ? 0 : 1;
+          pendingInstrument = currentInstrument;
           bridge.push (ev);
         }
       }
@@ -150,8 +158,47 @@ public:
     return kResultOk;
   }
 
-  tresult PLUGIN_API getState (IBStream*) override { return kNotImplemented; }
-  tresult PLUGIN_API setState (IBStream*) override { return kNotImplemented; }
+  tresult PLUGIN_API getState (IBStream* state) override {
+    if (!state) return kInvalidArgument;
+    // Chunk: magic 'MBST' (0x4D425354), version 1, instrument index, reserved
+    // param-pair count (0 for now — the only host-facing param is Instrument;
+    // future DSP params extend the chunk behind the version field).
+    uint32 magic = 0x4D425354; int32 version = 1; int32 inst = currentInstrument; int32 nParams = 0;
+    if (state->write (&magic, sizeof (magic)) != kResultOk) return kResultFalse;
+    if (state->write (&version, sizeof (version)) != kResultOk) return kResultFalse;
+    if (state->write (&inst, sizeof (inst)) != kResultOk) return kResultFalse;
+    if (state->write (&nParams, sizeof (nParams)) != kResultOk) return kResultFalse;
+    return kResultOk;
+  }
+
+  tresult PLUGIN_API setState (IBStream* state) override {
+    if (!state) return kInvalidArgument;
+    uint32 magic = 0; int32 version = 0;
+    if (state->read (&magic, sizeof (magic)) != kResultOk) return kResultFalse;
+    if (magic != 0x4D425354) return kResultFalse;
+    if (state->read (&version, sizeof (version)) != kResultOk) return kResultFalse;
+    if (version != 1) return kResultFalse;
+    int32 inst = 0;
+    if (state->read (&inst, sizeof (inst)) != kResultOk) return kResultFalse;
+    if (inst != 0 && inst != 1) return kResultFalse;
+    int32 nParams = 0;
+    if (state->read (&nParams, sizeof (nParams)) != kResultOk) return kResultFalse;
+    if (nParams < 0 || nParams > 1024) return kResultFalse;  // sanity; v1 writes 0
+    for (int32 p = 0; p < nParams; ++p) { int32 pathLen = 0; float value = 0.f;
+      if (state->read (&pathLen, sizeof (pathLen)) != kResultOk || pathLen < 0 || pathLen > 4096) return kResultFalse;
+      std::vector<char> buf ((size_t) pathLen);
+      if (pathLen > 0 && state->read (buf.data (), pathLen) != kResultOk) return kResultFalse;
+      if (state->read (&value, sizeof (value)) != kResultOk) return kResultFalse; }
+    // Queue the instrument load. drain() runs in the first process(); if the
+    // engine is not built yet the event stays queued and wins over the default
+    // queued by ensureEngine() via pendingInstrument below.
+    currentInstrument = inst;
+    pendingInstrument = inst;
+    MbiraEvent ev; ev.kind = MbiraEvent::LoadInstrument; ev.text = jsonForInstrument (inst);
+    bridge.push (ev);
+    if (MBIRA_TRACE ()) fprintf (stderr, "[mbira-vst3] setState: instrument=%d\n", inst);
+    return kResultOk;
+  }
   uint32 PLUGIN_API getTailSamples () override { return kNoTail; }
 
 private:
@@ -165,12 +212,13 @@ private:
       engine.reset ();
       return false;
     }
-    // Queue the embedded default instrument (dzaVadzimu) to the bridge, exactly
-    // like a runtime instrument switch. It is evaluated on the audio thread in
-    // the first process()'s drain(), ahead of any note-on, so the voice pool is
-    // always rebuilt before the first note strikes.
+    // Queue the pending instrument (default dzaVadzimu unless setState/automation
+    // selected one before activation) to the bridge, exactly like a runtime
+    // instrument switch. It is evaluated on the audio thread in the first
+    // process()'s drain(), ahead of any note-on, so the voice pool is always
+    // rebuilt before the first note strikes.
     {
-      MbiraEvent ev; ev.kind = MbiraEvent::LoadInstrument; ev.text = getMbiraDzaJson ();
+      MbiraEvent ev; ev.kind = MbiraEvent::LoadInstrument; ev.text = jsonForInstrument (pendingInstrument);
       bridge.push (ev);
     }
     if (MBIRA_TRACE ()) fprintf (stderr, "[mbira-vst3] engine up: sr=%.0f bs=%d\n", sr, (int) bs);
@@ -186,6 +234,8 @@ private:
   EventBridge bridge;
   std::vector<float> planesScratch;
   ProcessSetup processSetup {};
+  int currentInstrument = 0;  // last known loaded instrument index (state round-trip)
+  int pendingInstrument = 0;  // instrument to load on the next engine build
 };
 
 // ---------------------------------------------------------------------------
@@ -222,6 +272,22 @@ public:
       return kResultOk;
     }
     return kResultFalse;
+  }
+
+  // Hosts hand the component state (processor->getState chunk) to the controller
+  // so the automation parameter agrees with the restored engine state.
+  tresult PLUGIN_API setComponentState (IBStream* state) override {
+    if (!state) return kInvalidArgument;
+    uint32 magic = 0; int32 version = 0;
+    if (state->read (&magic, sizeof (magic)) != kResultOk) return kResultFalse;
+    if (magic != 0x4D425354) return kResultFalse;
+    if (state->read (&version, sizeof (version)) != kResultOk) return kResultFalse;
+    if (version != 1) return kResultFalse;
+    int32 inst = 0;
+    if (state->read (&inst, sizeof (inst)) != kResultOk) return kResultFalse;
+    if (inst != 0 && inst != 1) return kResultFalse;
+    setParamNormalized (kInstrumentParamId, inst);
+    return kResultOk;
   }
 };
 
