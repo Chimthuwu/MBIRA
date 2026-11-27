@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<!-- test harness: relaxed CSP so the error handler can run inline -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'">
+<title>MBIRA-TEST</title>
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/app.css">
+<script>
+window.__ERRS__ = [];
+window.addEventListener('error', (e) => {
+  window.__ERRS__.push((e.message||'') + ' @ ' + (e.filename||'') + ':' + (e.lineno||''));
+});
+window.addEventListener('unhandledrejection', (e) => {
+  window.__ERRS__.push('REJECT: ' + ((e.reason && e.reason.message) || e.reason));
+});
+</script>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="topbar">
+    <nav class="nav" id="nav"></nav>
+    <label class="field"><span class="field__label">Instrument</span>
+      <select class="select" id="instrument"></select></label>
+    <button class="btn" id="panic">Panic</button>
+  </header>
+  <section class="hero"><div class="board" id="board"><div class="tines" id="tines"></div></div></section>
+  <main class="views">
+    <section class="view view--play" data-page="play">
+      <div class="panel panel--scope"><canvas class="scope" id="scope"></canvas></div>
+      <div class="panel"><div class="mods"></div></div>
+    </section>
+  </main>
+  <footer class="statusbar"><span class="status" id="st-midi"></span><span class="status">Voices <strong id="st-voices">0</strong></span><span class="status" id="st-preset"></span></footer>
+</div>
+<script type="module" src="js/main.js"></script>
+</body></html>

@@ -1,0 +1,2 @@
+[verify] WinMain start
+[verify] auto-quit timer fired
