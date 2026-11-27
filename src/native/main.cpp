@@ -284,6 +284,14 @@ static bool dispatchEvent(Engine& eng, const Event& ev) {
 // ---------------------------------------------------------------------------
 // Render mode
 
+// Escapes backslashes/quotes so the machine-readable JSON line survives
+// Windows paths (the v64 render metric is parsed by tests/dsp/*.mjs).
+static std::string jsonEscapePath(const std::string& s) {
+  std::string o; o.reserve(s.size() + 8);
+  for (char c : s) { if (c == '\\' || c == '"') o += '\\'; o += c; }
+  return o;
+}
+
 static void runRender(Engine& eng, const std::string& wavPath,
                       const std::string& eventsJsonText, double durationS) {
   choc::value::Value root;
@@ -394,7 +402,7 @@ static void runRender(Engine& eng, const std::string& wavPath,
   printf("{\"mode\":\"render\",\"wav\":\"%s\",\"rate\":%.0f,\"block\":%d,\"duration_s\":%.2f,"
          "\"latency_ms\":{\"median\":%.4f,\"mean\":%.4f,\"worst\":%.4f,\"n\":%zu},"
          "\"audio_loop_cpu_percent\":%.3f}\n",
-         wavPath.c_str(), eng.sampleRate, eng.blockSize, durationS,
+         jsonEscapePath(wavPath).c_str(), eng.sampleRate, eng.blockSize, durationS,
          med, mean, worst, latenciesMs.size(), cpuPercent);
 
   double peak = 0;
