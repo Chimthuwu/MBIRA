@@ -14,6 +14,7 @@ const OUTBOUND = new Set([
   'panic',
   'preset.load',
   'preset.save',
+  'preset.recall',
   'instrument.select',
 ]);
 

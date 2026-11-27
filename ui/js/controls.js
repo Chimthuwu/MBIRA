@@ -30,7 +30,7 @@ export function mountFaders(root){
     });
     input.addEventListener('change', () => { clearTimeout(timer); timer = 0; flush(); });
     paint();
-    setters.set(param, { get: () => +input.value, set: (v) => { input.value = String(v); paint(); flush(); } });
+    setters.set(param, { get: () => +input.value, set: (v, silent) => { input.value = String(v); paint(); if (!silent) flush(); } });
   });
   return setters;
 }
@@ -99,7 +99,7 @@ export function mountKnobs(root){
 
     dial.addEventListener('dblclick', () => { val = (min + max) / 2; paint(); commit(); });
     paint();
-    setters.set(k.dataset.param, { get: () => val, set: (v) => { val = Math.min(max, Math.max(min, v)); paint(); commit(); } });
+    setters.set(k.dataset.param, { get: () => val, set: (v, silent) => { val = Math.min(max, Math.max(min, v)); paint(); if (!silent) commit(); } });
   });
   return setters;
 }
@@ -221,7 +221,7 @@ export function mountModStrips(root){
       strip.addEventListener('dblclick', () => { depth = 0; paint(); commit(); });
       paint();
       strips.push({ get depth(){ return depth; } });
-      setters.set(param, { get: () => depth, set: (v) => { depth = Math.max(-1, Math.min(1, v)); paint(); commit(); } });
+      setters.set(param, { get: () => depth, set: (v, silent) => { depth = Math.max(-1, Math.min(1, v)); paint(); if (!silent) commit(); } });
     }
   });
   return setters;

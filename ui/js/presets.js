@@ -19,6 +19,7 @@
 export const PRESET_STORAGE_KEY = 'mbira.presets.v1';
 export const PRESET_SCHEMA = 1;
 import { INSTRUMENTS } from './instruments.js';
+import { send } from './bridge.js';
 const KNOWN_INSTRUMENTS = new Set(INSTRUMENTS.map((i) => i.id));
 function knownInstrument(id){
   return typeof id === 'string' && KNOWN_INSTRUMENTS.has(id) ? id : undefined;
@@ -125,13 +126,23 @@ export function mountPresets({ select, nameInput, saveButton, exportButton, impo
   const shipped = snapshot();
 
   const applyParams = (params) => {
+    // Block-atomic recall (§5.4): ONE preset.recall message applies every value
+    // on the next audio block (no per-param ramp), then the controls repaint
+    // silently (no per-control param.set, which would undo the atomic swap).
+    const batch = {};
+    for (const path of paths){
+      const v = params[path];
+      if (typeof v !== 'number' || !Number.isFinite(v)) continue;
+      batch[path] = v;
+    }
+    if (Object.keys(batch).length) send('preset.recall', { params: batch });
     let applied = 0;
     for (const path of paths){
       const v = params[path];
       if (typeof v !== 'number' || !Number.isFinite(v)) continue;
       const c = controls.get(path);
       if (!c) continue;
-      c.set(v); // the control repaints and posts its own param.set
+      c.set(v, true); // silent repaint only
       applied++;
     }
     return applied;

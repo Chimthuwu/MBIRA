@@ -309,6 +309,25 @@ static bool fieldContains(const wchar_t* field, const wchar_t* json, const wchar
   return wcsstr(f, needle) != nullptr;
 }
 
+// Extracts the balanced-brace object that follows "params": in a ui message
+// (preset.recall payload). Values are numbers and keys are param paths, so a
+// simple string/brace scanner is enough.
+static std::wstring extractParamsObject(const wchar_t* json) {
+  const wchar_t* k = wcsstr(json, L"\"params\"");
+  if (!k) return L"";
+  const wchar_t* open = wcschr(k + 8, L'{');
+  if (!open) return L"";
+  int depth = 0;
+  bool inStr = false;
+  for (const wchar_t* p = open; *p; ++p) {
+    if (inStr) { if (*p == L'\\') { ++p; if (!*p) break; continue; } if (*p == L'"') inStr = false; continue; }
+    if (*p == L'"') { inStr = true; continue; }
+    if (*p == L'{') ++depth;
+    else if (*p == L'}') { if (--depth == 0) return std::wstring(open, p + 1); }
+  }
+  return L"";
+}
+
 inline bool wvHostReady();
 inline void wvSendHost(const wchar_t* json);   // defined below (used in ui.ready)
 
@@ -348,6 +367,21 @@ static void handleUiMessage(const wchar_t* json) {
     g_activeNotes.clear();
     { std::lock_guard<std::mutex> lk(g_noteMutex); g_noteQueue.clear(); }
     g_statusDirty = true;
+  } else if (wcsstr(json, L"\"type\":\"preset.recall\"")) {
+    // Block-atomic preset recall (§5.4): one message, all params land on the
+    // next audio block via __mbira.recall (no per-param ramp).
+    std::wstring obj = extractParamsObject(json);
+    if (obj.empty()) {
+      wvLog("[wv2] preset.recall without params - ignored\n");
+    } else if (g_paramSink) {
+      int n = WideCharToMultiByte(CP_UTF8, 0, obj.c_str(), -1, nullptr, 0, nullptr, nullptr);
+      if (n > 0) {
+        std::string s((size_t) n, '\0');
+        WideCharToMultiByte(CP_UTF8, 0, obj.c_str(), -1, s.data(), n, nullptr, nullptr);
+        s.resize(strlen(s.c_str()));  // drop the NUL the -1 conversion appended
+        g_paramSink("__mbira.recall(" + s + ")");
+      }
+    }
   } else if (wcsstr(json, L"\"type\":\"ui.ready\"")) {
     // UI is up: give it the loaded instrument so the tine field matches.
     if (!g_instrumentJson.empty()) {
