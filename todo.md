@@ -465,11 +465,11 @@ Two things reported from actually using the app.
   Why: voices.max is now a real DSP/preset param (clamped 8..64) but has no visible control, so users cannot set or see it; only the engine/preset path exists.
   Done when: a control on the Play page (or top bar) sends voices.max and the status-bar Voices cap reflects it; layout still fits at the default 741x528 window.
   Hints: reuse the controls registry so presets capture it automatically; verify with node --check + a CDP layout check like the 2026-11-10 shell-height pass (no eyeballing needed).
-- [ ] **Document WebView2 import-lib/header regeneration** [P2] [docs] [size:S]
+- [x] **Document WebView2 import-lib/header regeneration** [P2] [docs] [size:S]
   Why: deps/extract/ is gitignored and the repo move lost WebView2Loader.dll.lib + WebView2.h; the native build failed until they were regenerated (this run: gendef+dlltool from the vendored wv2.nupkg + unzip build/native/include). The recipe exists only in the run log.
   Done when: deps/manifest.json (or docs/how-to-run.md) carries the regeneration recipe and lists both artifacts as required for `cmake --build build-native`.
   Hints: gendef WebView2Loader.dll; dlltool -d ... -m i386:x86-64 -l WebView2Loader.dll.lib; unzip wv2.nupkg "build/native/include/*" -d sdk/.
-- [ ] **Document `npm install` requirement for fresh clones** [P3] [docs] [size:S]
+- [x] **Document `npm install` requirement for fresh clones** [P3] [docs] [size:S]
   Why: `npm test` fails with ERR_MODULE_NOT_FOUND ('@elemaudio/core') until `npm install` runs; the quality gate recorded this as 1 failing test at run start.
   Done when: docs/how-to-run.md (and ui/README.md if it mentions tests) says to run `npm install` before `npm test`.
   Hints: also mention `npm run build:dsp` being part of `npm test` already.
