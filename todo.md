@@ -1,5 +1,55 @@
 # MBIRA todo.md
 
+# OPEN TASKS (checklist index, 2026-11-27)
+
+Prep run from start SHA de28381. Ordered best-first. One worker per item; do not start another section's `[!]` items (those are human-gated ears/DAW/credentials).
+
+- [ ] **Expose macro.resonance/buzz/brightness, master and voices.max as automatable VST3 parameters** [P2] [size:M] - src/vst3/ processor + controller: add automatable params alongside the existing Instrument param, host automation -> setParam, include them in the MBST state chunk (chunk format already carries a param-pair list).
+  Done when: Steinberg validator passes (47+), smoke host renders identically at defaults, an automation change changes the rendered output, npm test stays green.
+  Source: audit docs/AUDIT-2026-11-10.md §6 Phase D 12 (VST3 to spec §2.2); state round-trip commit 1013ce0.
+- [ ] **voices.max control on the Play page** [P3] [size:S] - ui/index.html top bar (near the status line) + ui/js/controls.js: small int control sending `voices.max` (8..64); reuse the controls registry so presets capture it; status-bar `st-voices-cap` reflects it.
+  Done when: node --check clean, CDP layout check (2026-11-10 shell-pass style, no eyeballing) fits at 741x528, status-bar cap updates.
+  Source: Inbox (agent-proposed), promoted 2026-11-27 (inbox copy ticked).
+- [ ] **Refresh docs/vst3-host-test-checklist.md for the current plugin** [P2] [size:S] - Checklist still describes the M1 spike (no params/state, 0/17 executed). Rewrite steps for: default instrument + switching, Instrument param, DAW save/reload state round-trip, block-atomic recall, voices.max; fix the nonexistent path the audit flagged.
+  Done when: every step matches a feature that exists at HEAD, all referenced paths resolve.
+  Source: audit §3 row 7.8 + todo M1 re-do note.
+- [ ] **Write docs/recording-brief.md for the collaborator recordings** [P2] [size:M] - Unblocks the augmented sample-layer engine (design DONE, build blocked on recordings). Specify takes per key (hard/soft strikes, body layers, buzz), mic/mounting guidance, file naming + delivery format, usage-rights note.
+  Done when: the brief covers every recording docs/design-augmented-engine.md consumes, followable by a non-engineer.
+  Source: todo Phase C 8 ("the recording brief needs writing; question open since M1") + audit §5.6.
+- [ ] **Reconcile spec §5.3 param names/defaults with the shipped set** [P2] [size:M] - docs/MBIRA-SPEC.md §5.3 vs src/dsp/index.js: appendix table mapping spec name -> shipped param path (soundboard 0.5->0.35, pluck 0.5->0.30, gourd off->0.30, buzz 0.2) marking superseded rows, or amend §5.3 in place.
+  Done when: no shipped param lacks a spec row, no spec row describes a renamed param without a note.
+  Source: audit §5.5 (namespace + defaults drift).
+- [ ] **Root README.md** [P2] [size:S] - Missing §8 doc. One-pager: what MBIRA is, repo layout (src/dsp, src/native, src/vst3, ui/, tests/, docs/, evidence/), build+test quickstart (npm install first; npm run build:dsp; cmake recipe pointer to docs/how-to-run.md + deps/manifest.json), status pointer to todo.md.
+  Done when: a fresh reader can build and run `npm test` and `mbira-poc render` from the README alone.
+  Source: audit §5.6 (5 of 6 required §8 docs absent).
+- [ ] **Live-mode clean shutdown handler** [P2] [size:M] - src/native/main.cpp: Ctrl+C / WM_CLOSE path for `mbira-poc live` that stops the RtAudio stream, closes RtMidi, exits 0 with a log line (no state save, PoC).
+  Done when: a short `mbira-poc live --ui gdi` run ends on Ctrl+C with exit 0 and no stuck audio device; render mode and npm test unaffected.
+  Source: todo "Blockers / open items" (no clean shutdown handler, deferred to M3).
+- [ ] **Offline steal-order test** [P2] [size:M] - tests/dsp/voices.mjs or new tests/dsp/steal-order.mjs wired into npm test: with the synthetic 80-key instrument, release a subset of held voices and assert the released ones decay first while sustained/newest keep ringing (order implemented at src/dsp/index.js:297-318).
+  Done when: test fails if steal order regresses, passes in npm test.
+  Source: todo "voice management test suite — Open (remaining): steal ORDER not asserted" + audit §3 row 7.7.
+- [ ] **Measure renderAll-per-event cost (7.5), do not fix yet** [P2] [size:M] - src/dsp/index.js rebuilds the whole graph per noteOn/setParam. Benchmark N events on the native render path (per-event wall time), report live-mode dropouts at 128/256 blocks if measurable; record numbers + a batching go/no-go recommendation in a short docs note or AUDIT §3 row 7.5.
+  Done when: measured numbers for 1/8/64-event bursts recorded with the command used; no implementation change.
+  Source: audit §3 row 7.5 (risk, unmeasured).
+- [ ] **Compact-layout spectrum + spectrogram re-check** [P3] [size:S] - 2026-11-10 shell pass verified the scope at small canvas size; spectrum/spectrogram were only probed "0 bright px". Re-run the CDP probe at the real 741x528 compact size: strike a note, assert real drawn content in both tabs.
+  Done when: both tabs show trace/pixel evidence at the compact size, or a defect is filed with measurements.
+  Source: todo 2026-11-10 "Play page fits" note; promoted from [!] (CDP-verifiable, not an ear test).
+- [ ] **Refresh ui/README.md to current reality** [P3] [size:S] - Still says "drop-in mockup scaffold"; file tree misses presets.js, instruments.js, visualizer.js. Update tree + features (Play page, mod strips, presets/localStorage, instrument selector, visualizer, real telemetry) and the npm install-before-test note.
+  Done when: file tree matches ui/ contents; visualizer and presets mentioned.
+  Source: gap between ui/README.md and what exists.
+- [ ] **JS syntax gate in npm test** [P3] [size:S] - package.json: add a step running `node --check` over ui/js/*.js (and src/dsp/index.js) ahead of the existing test chain.
+  Done when: a deliberately broken ui/js file fails npm test; current tree passes.
+  Source: gap — UI ships from disk at runtime (no build step), so only tests catch syntax errors.
+- [ ] **Preset delete + rename in the top bar** [P3] [size:S] - ui/js/presets.js + ui/index.html: Delete/Rename actions for entries in localStorage mbira.presets.v1, reusing the save/recall flow; deleting the active preset falls back to Acoustic Default.
+  Done when: rename/delete survive a page reload (CDP), tests/presets/roundtrip.mjs stays green.
+  Source: gap — presets.js has save/recall/export/import but no management of stored entries.
+- [ ] **tests/native audit: wire or document** [P3] [size:S] - 8 unwired scratch files (propset.js, sine.js, tine*.js). Read each; document them as spike-only in tests/native/README.md, or delete with the reason in the commit message.
+  Done when: every file in tests/native is documented or removed; npm test unaffected.
+  Source: audit §4 + directory listing.
+- [ ] **Licence loose ends note (choc + WebView2 redistribution)** [P3] [size:S] - LICENSES.md: (a) resolve/state the choc ISC-vs-BSD discrepancy against its upstream repo, (b) one-paragraph WebView2 redistribution note (bootstrapper vs fixed runtime) for shipping the standalone.
+  Done when: both items have a resolution or an explicit OPEN flag for the human.
+  Source: audit §3 row 7.8.
+
 ## 2026-11-11 — VST3 brought current (user-escalated)
 
 - [x] **VST3 rebuilt against the current DSP bundle (damper model + 6-partial modal engine + modulators).** `build-vst3/generated/dsp_bundle.h` now regenerates from `build/dsp-bundle.js` at configure time, so the plugin always matches the shipped sound. Verified: both embedded instruments load and ring in the smoke host (dza −15.7 dBFS, nyunga −6.0 dBFS), deterministically across runs.
@@ -389,7 +439,7 @@ It is now the seed of §5.4, scoped to what can actually round-trip today.
       messages reached the host; no console errors, no top-bar overlap or
       overflow at 741 / 996 / 1400 px.
 - [x] **§5.4 preset files on disk + versioned round-trip DONE (2026-11-11):** export/import `.mbirapreset` (single) and bank JSON with v1 schema validation; covered by `tests/presets/roundtrip.mjs`.
-- [ ] **§5.4 still open:** block-atomic recall (sample-boundary swap vs per-param ramp), instrument + `voices.max` persistence, native plugin-state round-trip.
+- [x] **§5.4 still open:** block-atomic recall (sample-boundary swap vs per-param ramp), instrument + `voices.max` persistence, native plugin-state round-trip. — DONE 2026-11-27, all three landed (see the "shipped 2026-11-10 WIP + §5.4 preset files" section; do not re-execute).
 
 ## 2026-11-10 (later still) — the Play page fits the default window; brightness now does something
 
@@ -461,7 +511,7 @@ Two things reported from actually using the app.
 - 2026-11-27 — Voice-pool display in status bar: show the real pool cap 64 (honest UI, matches identity-lock principle; cap is build-time fixed). Checkpoint 8af955a1f0bec6a8d4b8daf55270db242d6c65be.
 ## Inbox (agent-proposed)
 
-- [ ] **voices.max UI control on the Play page** [P3] [ui] [size:S]
+- [x] **voices.max UI control on the Play page** [P3] [ui] [size:S] — PROMOTED 2026-11-27 to OPEN TASKS (top of file); do not double-execute.
   Why: voices.max is now a real DSP/preset param (clamped 8..64) but has no visible control, so users cannot set or see it; only the engine/preset path exists.
   Done when: a control on the Play page (or top bar) sends voices.max and the status-bar Voices cap reflects it; layout still fits at the default 741x528 window.
   Hints: reuse the controls registry so presets capture it automatically; verify with node --check + a CDP layout check like the 2026-11-10 shell-height pass (no eyeballing needed).
