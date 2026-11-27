@@ -121,15 +121,15 @@
 - [x] Host: named-param events {"type":"param","name":...} + sustain events; MBIRA_RATIOSET env for A/B renders. Evidence: evidence/wav-m2/.
 - [x] 3.4 (rest): explicit steal/overlap/sustain test suite (`tests/dsp/voices.mjs`, 2026-11-11); 32/64-voice CPU VERIFIED 2026-11-27 via `tests/dsp/voices-cpu.mjs` (native `audio_loop_cpu_percent` @ 48 kHz/256): 32 held voices 25.7 %, 64 held voices 36.4 % — real-time viable with headroom (hard assert < 80 %, wired into `npm test`).
 - [x] 4: instrument JSONs (mbira-dzavadzimu 24-key, nyunga-nyunga 15-key) + schema validator; wire loadInstrument. VERIFIED 2026-11-27: validate.mjs 24/24 + 15/15 OK, instrument-selector OK, DSP loadInstrument evidence inst-*.wav (see 2026-11-11 VST3 section — both instruments embedded + switching in the plugin too).
-- [ ] DIRECTION (user, 2026-11-07): Pigments-inspired MODULATOR architecture (velocity, key-map, ADSR, LFO, random sources -> any param) + AUGMENTED engine = synthesis x MULTISAMPLING (el.sample exists in core 4.0.1). Design the modulator matrix + sample-layer engine before building presets/instrument switching.
+- [x] DIRECTION (user, 2026-11-07): design BEFORE building — DONE 2026-11-27 as `docs/design-augmented-engine.md` (augmented sample-layer engine via el.sample + engine.blend). The modulator MATRIX half is superseded by the identity lock (see 'Decisions made'); the mod framework already ships as per-parameter mod strips (velocity/key/random/LFO latched at note-on). Build is blocked on collaborator recordings.
 - [x] UI (interim Win32): control panel with pluck/master sliders, SOUNDBOARD enable+amount, GOURD enable+amount+freq, BUZZ enable+intensity+character, cantilever/classic toggle; params flow through the live event queue (Raw events) to the service thread. UI smoke test clean (0 xruns). WebView2 editor still pending (design agents).
 - [x] MIDI: RtMidi now OPENS port 0 (microKEY-37 detected in live boot). Actual playing still needs human test.
 - [x] 4 (core): src/instruments/ schema.json + mbira-dzavadzimu.json (24 keys, 3 ranks) + nyunga-nyunga.json (15 keys, spec 4.2 coords), per-key modal ratios/taus/amplitudes/excitationSensitivity, per-instrument soundboard/gourd/buzz config; validator tests/instruments/validate.mjs wired into npm test.
 - [x] DSP loadInstrument(jsonText): voice pool rebuilds from instrument key list, per-tine overrides, body reconfig. Host loads at startup (MBIRA_INSTRUMENT env) and feeds schematic geometry to the UI keyboard. Evidence: inst-dzavadzimu.wav vs inst-nyunga.wav (audibly distinct).
 - [x] IDENTITY LOCK (Design Agent Package 2): NO modulator matrix, NO Mod page, ever. UI surface = 3 macros (Resonance/Buzz/Brightness) + engine blend (physical<->samples) + per-parameter mod strips + body-layer samples strip. Mod-framework params remain engine internals (driven by mod strips).
 - [x] Macros in DSP: macro.resonance (scales soundboard bands + gourd amount), macro.buzz (scales rattle intensity), macro.brightness (overtone exponent tilt - NOTE inverted exponent, b<1). Verified by A/B renders (macro-*.wav). Interim panel has MACROS row; ADSR/LFO row relabelled DEV ONLY.
-- [ ] Engine blend + body-layer samples: needs el.sample + recordings from the Zimbabwean collaborator. DSP hook next; UI = Body page strip (design agents own visuals).
-- [ ] UI: instrument selector; mod page; sample-layer strip (augmented engine).
+- [!] Engine blend + body-layer samples: design DONE (docs/design-augmented-engine.md); BUILD BLOCKED on recordings from the Zimbabwean collaborator (external dependency, not available to the agent).
+- [x] UI: instrument selector SHIPPED (2026-11-11, top-bar dropdown); mod page REMOVED by the identity lock (no Mod page, ever — shipped mod strips are the surface); sample-layer strip deferred with the augmented-engine build (blocked on recordings).
 - [x] Modulator framework v1: per-voice ADSR (attack/release/sustain), shared LFO -> master (tremolo) and -> pitch (audio-rate), random depth, velocity depth params; all via setParam, defaults = M1 sound. Interim panel has a MODULATORS row. Verified: 5 Hz tremolo ripple, 2 Hz pitch sweep 260-270 Hz, swell+release envelope. Full routing matrix + sample-layer engine = next.
 
 
@@ -451,3 +451,7 @@ Two things reported from actually using the app.
       and the Play-page sentence describe the live tilt.
 - [ ] Not confirmed by ear - measured only. If it now sounds too EQ-ish at the
       extremes, ±6 dB at 1.6 kHz is the obvious dial to turn down.
+
+## Decisions made (review me)
+
+- 2026-11-27 — L121 modulator-matrix design vs identity lock (L126: NO matrix/Mod page, ever): followed the identity lock; designed the augmented sample-layer engine only (docs/design-augmented-engine.md). Checkpoint ff2b2992932401c32322c43567922dedc8db6c81.
